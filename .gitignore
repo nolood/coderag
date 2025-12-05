@@ -1,0 +1,21 @@
+# Rust
+/target/
+Cargo.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# CodeRAG data (when testing locally)
+.coderag/
+.fastembed_cache
+# Environment
+.env
+.env.local

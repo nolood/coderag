@@ -1,0 +1,38 @@
+# CodeRAG Configuration
+# This is the default configuration file.
+# Copy to .coderag/config.toml in your project and customize.
+
+[indexer]
+# File extensions to index
+extensions = ["rs", "py", "ts", "tsx", "js", "jsx", "go", "java"]
+
+# Patterns to ignore (in addition to .gitignore)
+ignore_patterns = [
+    "node_modules",
+    "target",
+    ".git",
+    "dist",
+    "build",
+    "__pycache__",
+    ".venv",
+    "vendor",
+]
+
+# Approximate chunk size in tokens
+chunk_size = 512
+
+[embeddings]
+# Embedding model name
+# Options: "nomic-embed-text-v1.5", "all-MiniLM-L6-v2"
+model = "nomic-embed-text-v1.5"
+
+# Batch size for embedding generation
+batch_size = 32
+
+[storage]
+# Path to the LanceDB database (relative to .coderag/)
+db_path = "index.lance"
+
+[server]
+# Server transport type
+transport = "stdio"

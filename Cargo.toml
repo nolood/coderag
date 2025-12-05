@@ -1,0 +1,84 @@
+[package]
+name = "coderag"
+version = "0.1.0"
+edition = "2021"
+description = "CLI tool + MCP server for semantic code search"
+license = "MIT"
+repository = "https://github.com/nolood/coderag"
+
+[dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+
+# File walking
+ignore = "0.4"
+walkdir = "2"
+
+# Embeddings
+fastembed = "4"
+
+# Vector storage
+lancedb = "0.15"
+arrow-array = "53"
+arrow-schema = "53"
+
+# MCP
+rmcp = { version = "0.10", features = ["server", "transport-io", "transport-sse-server", "macros"] }
+schemars = "1"
+
+# Utilities
+anyhow = "1"
+thiserror = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uuid = { version = "1", features = ["v4"] }
+indicatif = "0.17"
+glob = "0.3"
+futures = "0.3"
+
+# v0.2 additions - Tree-sitter AST parsing
+tree-sitter = "0.25"
+tree-sitter-rust = "0.24"
+tree-sitter-python = "0.25"
+tree-sitter-javascript = "0.25"
+tree-sitter-typescript = "0.23"
+tree-sitter-go = "0.25"
+tree-sitter-java = "0.23"
+
+# v0.2 additions - File watching
+notify = "7"
+notify-debouncer-full = "0.4"
+
+# v0.3 additions - Metrics
+prometheus = "0.13"
+lazy_static = "1.4"
+
+# v0.3 additions - Multi-project support
+directories = "5"
+chrono = { version = "0.4", features = ["serde"] }
+
+# v0.3 additions - Hybrid Search (BM25 + Vector)
+tantivy = "0.22"
+async-trait = "0.1"
+
+# v0.3 additions - Web UI and HTTP/SSE MCP transport
+# Note: axum 0.8 is required by rmcp 0.10 for SSE transport
+axum = { version = "0.8", features = ["ws"] }
+axum-extra = { version = "0.10", features = ["typed-header"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["cors", "fs"] }
+tokio-util = { version = "0.7", features = ["rt"] }
+tokio-stream = "0.1"
+rust-embed = "8"
+mime_guess = "2"
+
+[dev-dependencies]
+tempfile = "3"

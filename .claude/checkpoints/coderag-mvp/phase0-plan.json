@@ -1,0 +1,111 @@
+{
+  "feature": "CodeRAG MVP v0.1",
+  "stack": "rust",
+  "description": "Local MCP server for semantic code search using embeddings and vector database",
+  "hasFrontend": false,
+  "detectedPatterns": {
+    "projectType": "greenfield",
+    "architecture": "modular CLI with embedded services",
+    "transport": "stdio MCP"
+  },
+  "implementationPlan": {
+    "phases": [
+      {
+        "phase": 0,
+        "name": "Project Setup",
+        "tasks": ["Create Cargo.toml", "Create directory structure", "Setup .gitignore"]
+      },
+      {
+        "phase": 1,
+        "name": "CLI Skeleton",
+        "tasks": ["Define CLI commands with clap", "Implement command routing"]
+      },
+      {
+        "phase": 2,
+        "name": "File Walker",
+        "tasks": ["Implement walker with ignore crate", "Filter by extensions", "Apply custom patterns"]
+      },
+      {
+        "phase": 3,
+        "name": "Chunker",
+        "tasks": ["Line-based chunking", "Track file paths and line numbers", "Token estimation"]
+      },
+      {
+        "phase": 4,
+        "name": "Embeddings",
+        "tasks": ["fastembed integration", "Batch processing", "Query embedding"]
+      },
+      {
+        "phase": 5,
+        "name": "Storage",
+        "tasks": ["LanceDB setup", "Define schema", "CRUD operations"]
+      },
+      {
+        "phase": 6,
+        "name": "Vector Search",
+        "tasks": ["Query to embedding conversion", "ANN search", "Result ranking"]
+      },
+      {
+        "phase": 7,
+        "name": "MCP Server",
+        "tasks": ["rmcp server setup", "search tool", "list_files tool", "get_file tool"]
+      },
+      {
+        "phase": 8,
+        "name": "CLI Commands Integration",
+        "tasks": ["init command", "index command", "search command", "serve command"]
+      },
+      {
+        "phase": 9,
+        "name": "Polish & Testing",
+        "tasks": ["Error handling", "Logging", "Integration tests"]
+      }
+    ]
+  },
+  "filesToCreate": [
+    "Cargo.toml",
+    "src/main.rs",
+    "src/lib.rs",
+    "src/config.rs",
+    "src/cli/mod.rs",
+    "src/indexer/mod.rs",
+    "src/indexer/walker.rs",
+    "src/indexer/chunker.rs",
+    "src/embeddings/mod.rs",
+    "src/embeddings/fastembed.rs",
+    "src/storage/mod.rs",
+    "src/storage/lancedb.rs",
+    "src/search/mod.rs",
+    "src/search/vector.rs",
+    "src/mcp/mod.rs",
+    "src/mcp/server.rs",
+    "config/default.toml",
+    ".gitignore"
+  ],
+  "dependencies": {
+    "tokio": "1 (full features)",
+    "clap": "4 (derive)",
+    "serde": "1 (derive)",
+    "serde_json": "1",
+    "toml": "0.8",
+    "ignore": "0.4",
+    "walkdir": "2",
+    "fastembed": "4",
+    "lancedb": "0.15",
+    "arrow-array": "53",
+    "arrow-schema": "53",
+    "rmcp": "needs verification",
+    "anyhow": "1",
+    "tracing": "0.1",
+    "tracing-subscriber": "0.3",
+    "uuid": "1 (v4)",
+    "indicatif": "0.17",
+    "glob": "0.3"
+  },
+  "questions": [
+    "Model choice: nomic-embed-text-v1.5 vs all-MiniLM-L6-v2?",
+    "Default chunk size: 512 tokens as specified?",
+    "rmcp availability: may need alternative MCP implementation"
+  ],
+  "timestamp": "2025-12-05T00:00:00Z"
+}
