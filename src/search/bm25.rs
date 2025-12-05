@@ -317,7 +317,10 @@ impl Bm25Search {
 impl Search for Bm25Search {
     async fn search(&self, query: &str, limit: usize) -> Result<Vec<SearchResult>> {
         let start = std::time::Instant::now();
-        let index = self.index.read().expect("BM25 index lock poisoned");
+        let index = self.index.read().unwrap_or_else(|poisoned| {
+            // Clear the poison and return the guard
+            poisoned.into_inner()
+        });
         let results = index.search(query, limit)?;
         let elapsed = start.elapsed();
         info!(

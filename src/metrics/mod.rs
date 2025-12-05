@@ -122,16 +122,22 @@ pub fn register_metrics() {
 ///
 /// Returns a string containing all registered metrics in the Prometheus
 /// exposition format, suitable for scraping by Prometheus.
+///
+/// Returns an empty string if encoding fails (which should not happen with valid metrics).
 pub fn gather_metrics() -> String {
     let encoder = TextEncoder::new();
     let metric_families = REGISTRY.gather();
     let mut buffer = Vec::new();
 
-    encoder
-        .encode(&metric_families, &mut buffer)
-        .expect("Failed to encode metrics");
+    if let Err(e) = encoder.encode(&metric_families, &mut buffer) {
+        tracing::error!("Failed to encode metrics: {}", e);
+        return String::new();
+    }
 
-    String::from_utf8(buffer).expect("Metrics contained invalid UTF-8")
+    String::from_utf8(buffer).unwrap_or_else(|e| {
+        tracing::error!("Metrics contained invalid UTF-8: {}", e);
+        String::new()
+    })
 }
 
 /// Get current metric values in a human-readable format
