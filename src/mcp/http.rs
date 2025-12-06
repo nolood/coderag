@@ -14,6 +14,7 @@ use tracing::{error, info};
 
 use crate::search::SearchEngine;
 use crate::storage::Storage;
+use crate::symbol::SymbolIndex;
 
 use super::server::CodeRagServer;
 
@@ -61,6 +62,7 @@ pub struct HttpTransport {
     config: HttpTransportConfig,
     search_engine: Arc<SearchEngine>,
     storage: Arc<Storage>,
+    symbol_index: Arc<SymbolIndex>,
     root_path: PathBuf,
 }
 
@@ -70,12 +72,14 @@ impl HttpTransport {
         config: HttpTransportConfig,
         search_engine: Arc<SearchEngine>,
         storage: Arc<Storage>,
+        symbol_index: Arc<SymbolIndex>,
         root_path: PathBuf,
     ) -> Self {
         Self {
             config,
             search_engine,
             storage,
+            symbol_index,
             root_path,
         }
     }
@@ -121,11 +125,12 @@ impl HttpTransport {
         // Clone values for the closure
         let search_engine = self.search_engine.clone();
         let storage = self.storage.clone();
+        let symbol_index = self.symbol_index.clone();
         let root_path = self.root_path.clone();
 
         // Register service factory with the SSE server
         let service_ct = sse_server.with_service(move || {
-            CodeRagServer::new(search_engine.clone(), storage.clone(), root_path.clone())
+            CodeRagServer::new(search_engine.clone(), storage.clone(), symbol_index.clone(), root_path.clone())
         });
 
         info!("MCP HTTP/SSE server is ready and accepting connections");
@@ -154,11 +159,12 @@ impl HttpTransport {
 pub async fn run_http_server(
     search_engine: Arc<SearchEngine>,
     storage: Arc<Storage>,
+    symbol_index: Arc<SymbolIndex>,
     root_path: PathBuf,
     port: u16,
 ) -> Result<()> {
     let config = HttpTransportConfig::with_port(port);
-    let transport = HttpTransport::new(config, search_engine, storage, root_path);
+    let transport = HttpTransport::new(config, search_engine, storage, symbol_index, root_path);
     transport.run().await
 }
 

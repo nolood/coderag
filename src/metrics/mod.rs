@@ -85,6 +85,26 @@ lazy_static! {
             "Embedding generation latency in seconds"
         ).buckets(vec![0.01, 0.05, 0.1, 0.5, 1.0, 2.0])
     ).expect("Failed to create EMBEDDING_LATENCY histogram");
+
+    // ============================================================================
+    // Watch mode metrics
+    // ============================================================================
+
+    /// Number of mass change events detected
+    pub static ref MASS_CHANGES_DETECTED: Counter = Counter::with_opts(
+        Opts::new(
+            "coderag_mass_changes_detected_total",
+            "Number of mass change events detected"
+        )
+    ).expect("Failed to create MASS_CHANGES_DETECTED counter");
+
+    /// Number of files in batched processing
+    pub static ref BATCHED_FILES: Histogram = Histogram::with_opts(
+        HistogramOpts::new(
+            "coderag_batched_files_count",
+            "Number of files in batched processing"
+        ).buckets(vec![1.0, 10.0, 50.0, 100.0, 500.0, 1000.0])
+    ).expect("Failed to create BATCHED_FILES histogram");
 }
 
 /// Register all metrics with the global registry
@@ -116,6 +136,12 @@ pub fn register_metrics() {
     REGISTRY
         .register(Box::new(EMBEDDING_LATENCY.clone()))
         .expect("Failed to register EMBEDDING_LATENCY");
+    REGISTRY
+        .register(Box::new(MASS_CHANGES_DETECTED.clone()))
+        .expect("Failed to register MASS_CHANGES_DETECTED");
+    REGISTRY
+        .register(Box::new(BATCHED_FILES.clone()))
+        .expect("Failed to register BATCHED_FILES");
 }
 
 /// Gather all metrics and encode them in Prometheus text format

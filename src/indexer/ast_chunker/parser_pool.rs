@@ -34,6 +34,8 @@ impl ParserPool {
         pool.register_language("tsx", tree_sitter_typescript::LANGUAGE_TSX.into());
         pool.register_language("go", tree_sitter_go::LANGUAGE.into());
         pool.register_language("java", tree_sitter_java::LANGUAGE.into());
+        pool.register_language("c", tree_sitter_c::LANGUAGE.into());
+        pool.register_language("cpp", tree_sitter_cpp::LANGUAGE.into());
 
         pool
     }
@@ -91,6 +93,10 @@ impl ParserPool {
             "tsx" => Some("tsx"),
             "go" => Some("go"),
             "java" => Some("java"),
+            "c" => Some("c"),
+            "cc" | "cxx" | "cpp" | "c++" => Some("cpp"),
+            "h" => Some("c"),  // Default .h to C
+            "hpp" | "hxx" | "h++" | "hh" => Some("cpp"),
             _ => None,
         }
     }

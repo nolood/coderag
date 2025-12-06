@@ -13,6 +13,7 @@ use crate::embeddings::EmbeddingGenerator;
 use crate::mcp::{run_http_server, CodeRagServer, Transport};
 use crate::search::SearchEngine;
 use crate::storage::Storage;
+use crate::symbol::SymbolIndex;
 
 /// Default port for HTTP transport
 const DEFAULT_HTTP_PORT: u16 = 3000;
@@ -64,17 +65,23 @@ pub async fn run(transport: &str, port: Option<u16>) -> Result<()> {
     // Initialize search engine
     let search_engine = Arc::new(SearchEngine::new(storage.clone(), embedder));
 
+    // Build symbol index from stored chunks
+    info!("Building symbol index from stored chunks...");
+    let chunks = storage.get_all_chunks().await?;
+    let symbol_index = Arc::new(SymbolIndex::build_from_chunks(&chunks));
+    info!("Symbol index ready with {} symbols", symbol_index.symbol_count());
+
     // Start server with the appropriate transport
     match transport_type {
         Transport::Stdio => {
             info!("Starting MCP server with stdio transport");
-            let server = CodeRagServer::new(search_engine, storage, root);
+            let server = CodeRagServer::new(search_engine, storage, symbol_index, root);
             server.run().await?;
         }
         Transport::Http => {
             let port = port.unwrap_or(DEFAULT_HTTP_PORT);
             info!("Starting MCP server with HTTP/SSE transport on port {}", port);
-            run_http_server(search_engine, storage, root, port).await?;
+            run_http_server(search_engine, storage, symbol_index, root, port).await?;
         }
     }
 

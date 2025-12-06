@@ -257,6 +257,7 @@ mod tests {
             start_line,
             end_line: start_line + 10,
             score,
+            file_header: None,
         }
     }
 

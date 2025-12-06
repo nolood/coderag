@@ -249,6 +249,7 @@ impl Bm25Index {
                 start_line,
                 end_line,
                 score,
+                file_header: None, // BM25 doesn't store file headers
             });
         }
 
@@ -353,6 +354,12 @@ mod tests {
             language: Some("rust".to_string()),
             vector: vec![0.0; 768],
             mtime: 0,
+            file_header: None,
+            semantic_kind: None,
+            symbol_name: None,
+            signature: None,
+            parent: None,
+            visibility: None,
         }
     }
 

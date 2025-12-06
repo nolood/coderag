@@ -1,0 +1,401 @@
+{
+  "phase0_plan": {
+    "features": [
+      {
+        "id": "openai-embeddings",
+        "name": "OpenAI Embeddings Provider",
+        "priority": 1,
+        "estimated_hours": 8,
+        "complexity": "Medium",
+        "dependencies": {
+          "crates": [
+            "openai-api-rust = \"0.1\" # or reqwest for direct API",
+            "async-openai = \"0.24\" # Alternative: more mature client"
+          ],
+          "files_to_create": [
+            "src/embeddings/provider.rs",
+            "src/embeddings/openai.rs"
+          ],
+          "files_to_modify": [
+            "src/embeddings/mod.rs",
+            "src/config.rs",
+            "Cargo.toml"
+          ]
+        },
+        "architecture_decisions": {
+          "trait_design": "Create EmbeddingProvider trait with async embed methods",
+          "config": "Add provider selection to EmbeddingsConfig",
+          "fallback": "Keep FastEmbed as default/fallback provider",
+          "batching": "Implement smart batching for API rate limits"
+        },
+        "implementation_details": {
+          "trait_definition": "trait EmbeddingProvider: Send + Sync { async fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>>; }",
+          "openai_impl": "Handle API keys, rate limiting, retries",
+          "factory_pattern": "Use enum-based factory for provider selection"
+        },
+        "testing_strategy": {
+          "unit_tests": "Mock API responses for OpenAI client",
+          "integration_tests": "Test provider switching and fallback",
+          "benchmark": "Compare embedding quality and speed"
+        },
+        "risks": {
+          "api_costs": "OpenAI API usage costs - implement caching",
+          "rate_limits": "Handle 429 errors with exponential backoff",
+          "network_failures": "Implement retry logic with fallback to FastEmbed"
+        }
+      },
+      {
+        "id": "file-header-injection",
+        "name": "File Header Injection for Search Results",
+        "priority": 2,
+        "estimated_hours": 4,
+        "complexity": "Easy",
+        "dependencies": {
+          "crates": [],
+          "files_to_create": [],
+          "files_to_modify": [
+            "src/storage/mod.rs",
+            "src/search/vector.rs",
+            "src/search/bm25.rs",
+            "src/search/hybrid.rs"
+          ]
+        },
+        "architecture_decisions": {
+          "approach": "Enhance SearchResult with file_header field",
+          "storage": "Store first 50 lines during indexing",
+          "retrieval": "Include headers in search results automatically"
+        },
+        "implementation_details": {
+          "searchresult_update": "Add file_header: Option<String> field",
+          "indexing": "Extract and store file headers during chunk creation",
+          "display": "Include headers in MCP tool responses"
+        },
+        "testing_strategy": {
+          "unit_tests": "Verify header extraction for various file types",
+          "integration_tests": "Ensure headers appear in search results"
+        },
+        "risks": {
+          "storage_size": "Minimal - only 50 lines per file",
+          "performance": "Negligible impact on search speed"
+        }
+      },
+      {
+        "id": "parallel-indexing",
+        "name": "Parallel File Indexing",
+        "priority": 3,
+        "estimated_hours": 2,
+        "complexity": "Easy",
+        "dependencies": {
+          "crates": [
+            "rayon = \"1.10\""
+          ],
+          "files_to_create": [],
+          "files_to_modify": [
+            "src/commands/index.rs",
+            "src/indexer/mod.rs",
+            "Cargo.toml"
+          ]
+        },
+        "architecture_decisions": {
+          "scope": "Parallelize file processing, not individual file chunking",
+          "batch_size": "Process files in batches to avoid memory issues",
+          "progress": "Maintain progress bar compatibility"
+        },
+        "implementation_details": {
+          "rayon_pool": "Use rayon::iter::ParallelIterator for file processing",
+          "thread_count": "Default to num_cpus, configurable",
+          "synchronization": "Use Arc<Mutex<Storage>> for thread-safe writes"
+        },
+        "testing_strategy": {
+          "unit_tests": "Verify parallel processing produces same results",
+          "performance_tests": "Measure speedup on large codebases",
+          "stress_tests": "Test with 10,000+ files"
+        },
+        "risks": {
+          "memory_usage": "Implement batching to control memory",
+          "database_locks": "May need connection pooling for LanceDB"
+        }
+      },
+      {
+        "id": "integration-tests",
+        "name": "Basic Integration Test Suite",
+        "priority": 4,
+        "estimated_hours": 2,
+        "complexity": "Easy",
+        "dependencies": {
+          "crates": [],
+          "files_to_create": [
+            "tests/integration/mod.rs",
+            "tests/integration/indexing.rs",
+            "tests/integration/search.rs",
+            "tests/fixtures/sample_code.rs"
+          ],
+          "files_to_modify": []
+        },
+        "architecture_decisions": {
+          "framework": "Use tokio::test for async tests",
+          "fixtures": "Create sample code in multiple languages",
+          "isolation": "Each test uses temporary directory"
+        },
+        "implementation_details": {
+          "test_flow": "Index fixtures → Search → Verify results",
+          "languages": "Test Rust, Python, TypeScript, Go",
+          "assertions": "Verify chunk counts, search relevance"
+        },
+        "testing_strategy": {
+          "coverage": "Test each supported language",
+          "scenarios": "Test edge cases like empty files, large files"
+        },
+        "risks": {
+          "ci_time": "Tests may be slow, use --ignored flag",
+          "model_downloads": "Cache embedding models in CI"
+        }
+      },
+      {
+        "id": "symbol-search-mcp",
+        "name": "Symbol Search MCP Tool",
+        "priority": 5,
+        "estimated_hours": 6,
+        "complexity": "Medium",
+        "dependencies": {
+          "crates": [],
+          "files_to_create": [
+            "src/mcp/tools/symbol_search.rs"
+          ],
+          "files_to_modify": [
+            "src/mcp/server.rs",
+            "src/mcp/mod.rs",
+            "src/storage/mod.rs"
+          ]
+        },
+        "architecture_decisions": {
+          "approach": "Leverage existing AST extractors for symbol info",
+          "storage": "Index symbols separately or enhance existing index",
+          "api": "LSP-style symbol search (functions, classes, etc.)"
+        },
+        "implementation_details": {
+          "tool_definition": "find_symbol tool with name and kind parameters",
+          "symbol_index": "Store symbol metadata during AST parsing",
+          "response_format": "Return symbol location, signature, docs"
+        },
+        "testing_strategy": {
+          "unit_tests": "Test symbol extraction for each language",
+          "integration_tests": "Test MCP tool end-to-end"
+        },
+        "risks": {
+          "index_size": "Symbol index may increase storage",
+          "complexity": "Need to handle language-specific symbols"
+        }
+      },
+      {
+        "id": "smart-batch-watch",
+        "name": "Smart Batch Detection for Watch Mode",
+        "priority": 6,
+        "estimated_hours": 4,
+        "complexity": "Medium",
+        "dependencies": {
+          "crates": [],
+          "files_to_create": [
+            "src/watcher/batch_detector.rs"
+          ],
+          "files_to_modify": [
+            "src/watcher/mod.rs",
+            "src/watcher/debouncer.rs"
+          ]
+        },
+        "architecture_decisions": {
+          "detection": "Identify git operations, mass file changes",
+          "thresholds": "Configurable thresholds for batch detection",
+          "behavior": "Longer debounce for mass changes"
+        },
+        "implementation_details": {
+          "heuristics": "Detect >10 files changed in <1 second",
+          "git_detection": "Watch .git/index.lock for git operations",
+          "adaptive_debounce": "Increase debounce time for mass changes"
+        },
+        "testing_strategy": {
+          "unit_tests": "Test batch detection logic",
+          "integration_tests": "Simulate git checkout, branch switch"
+        },
+        "risks": {
+          "false_positives": "May delay indexing unnecessarily",
+          "git_compatibility": "Handle different git versions"
+        }
+      },
+      {
+        "id": "search-benchmark",
+        "name": "Search Quality Benchmark Suite",
+        "priority": 7,
+        "estimated_hours": 6,
+        "complexity": "Medium",
+        "dependencies": {
+          "crates": [
+            "criterion = \"0.5\" # dev-dependency"
+          ],
+          "files_to_create": [
+            "benches/search_quality.rs",
+            "benches/fixtures/queries.json",
+            "benches/fixtures/expected_results.json"
+          ],
+          "files_to_modify": [
+            "Cargo.toml"
+          ]
+        },
+        "architecture_decisions": {
+          "metrics": "Measure precision, recall, MRR, nDCG",
+          "dataset": "Create curated query-result pairs",
+          "comparison": "Compare vector vs BM25 vs hybrid"
+        },
+        "implementation_details": {
+          "benchmark_queries": "50+ diverse queries with ground truth",
+          "metrics_calculation": "Implement standard IR metrics",
+          "reporting": "Generate HTML reports with charts"
+        },
+        "testing_strategy": {
+          "regression": "Detect search quality degradation",
+          "tuning": "Optimize hybrid weights based on results"
+        },
+        "risks": {
+          "maintenance": "Ground truth needs regular updates",
+          "subjectivity": "Relevance judgments may be subjective"
+        }
+      },
+      {
+        "id": "cpp-support",
+        "name": "C/C++ Language Support",
+        "priority": 8,
+        "estimated_hours": 4,
+        "complexity": "Easy",
+        "dependencies": {
+          "crates": [
+            "tree-sitter-c = \"0.23\"",
+            "tree-sitter-cpp = \"0.23\""
+          ],
+          "files_to_create": [
+            "src/indexer/ast_chunker/extractors/c.rs",
+            "src/indexer/ast_chunker/extractors/cpp.rs"
+          ],
+          "files_to_modify": [
+            "src/indexer/ast_chunker/extractors/mod.rs",
+            "src/indexer/ast_chunker/parser_pool.rs",
+            "Cargo.toml"
+          ]
+        },
+        "architecture_decisions": {
+          "shared_logic": "Share common extraction logic between C and C++",
+          "features": "Support structs, functions, classes, templates",
+          "preprocessor": "Handle macros and preprocessor directives"
+        },
+        "implementation_details": {
+          "extractor": "Implement SemanticExtractor trait",
+          "node_types": "Extract functions, structs, classes, templates",
+          "edge_cases": "Handle header files, inline functions"
+        },
+        "testing_strategy": {
+          "unit_tests": "Test extraction on sample C/C++ code",
+          "integration_tests": "Test with real C/C++ projects"
+        },
+        "risks": {
+          "complexity": "C++ templates and metaprogramming",
+          "headers": "Handling .h vs .hpp disambiguation"
+        }
+      }
+    ],
+    "dependencies": {
+      "critical_path": [
+        "openai-embeddings",
+        "file-header-injection",
+        "parallel-indexing",
+        "integration-tests"
+      ],
+      "parallel_tracks": [
+        ["symbol-search-mcp", "smart-batch-watch"],
+        ["search-benchmark", "cpp-support"]
+      ],
+      "shared_dependencies": {
+        "rayon": ["parallel-indexing"],
+        "openai_client": ["openai-embeddings"],
+        "tree_sitter": ["cpp-support", "symbol-search-mcp"]
+      }
+    },
+    "architecture_decisions": {
+      "provider_abstraction": {
+        "pattern": "Strategy pattern with trait-based providers",
+        "benefits": "Easy to add new embedding providers",
+        "configuration": "Runtime selection via config file"
+      },
+      "parallel_processing": {
+        "library": "Rayon for data parallelism",
+        "scope": "File-level parallelism, not chunk-level",
+        "control": "Configurable thread pool size"
+      },
+      "testing_strategy": {
+        "framework": "Built-in Rust testing with tokio::test",
+        "structure": "Separate unit and integration tests",
+        "fixtures": "Shared test fixtures in tests/fixtures"
+      },
+      "mcp_extensions": {
+        "pattern": "Tool-based extensions using rmcp macros",
+        "organization": "Separate module per tool",
+        "versioning": "Follow MCP protocol versioning"
+      }
+    },
+    "implementation_order": [
+      {
+        "week": 1,
+        "features": [
+          "openai-embeddings",
+          "file-header-injection", 
+          "parallel-indexing",
+          "integration-tests"
+        ],
+        "rationale": "Core improvements that immediately add value"
+      },
+      {
+        "week": 2,
+        "features": [
+          "symbol-search-mcp",
+          "smart-batch-watch",
+          "search-benchmark",
+          "cpp-support"
+        ],
+        "rationale": "Quality improvements and extended functionality"
+      }
+    ],
+    "risk_mitigation": {
+      "api_costs": {
+        "risk": "OpenAI API costs for embeddings",
+        "mitigation": "Implement caching, batching, and FastEmbed fallback"
+      },
+      "performance": {
+        "risk": "Parallel indexing memory usage",
+        "mitigation": "Batch processing with configurable limits"
+      },
+      "compatibility": {
+        "risk": "Breaking changes in search API",
+        "mitigation": "Version the API, maintain backwards compatibility"
+      },
+      "quality": {
+        "risk": "Search quality regression",
+        "mitigation": "Comprehensive benchmark suite with CI integration"
+      }
+    },
+    "success_metrics": {
+      "performance": {
+        "indexing_speed": "2-3x faster with parallel processing",
+        "search_latency": "<100ms for 95th percentile",
+        "memory_usage": "<500MB for 10k file codebase"
+      },
+      "quality": {
+        "search_precision": ">0.8 for top-5 results",
+        "search_recall": ">0.7 for top-10 results",
+        "test_coverage": ">80% for new code"
+      },
+      "adoption": {
+        "provider_usage": "Support for 2+ embedding providers",
+        "language_support": "8+ programming languages",
+        "mcp_tools": "5+ available MCP tools"
+      }
+    }
+  }
+}

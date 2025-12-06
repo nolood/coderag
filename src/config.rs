@@ -50,6 +50,18 @@ pub struct IndexerConfig {
     /// Maximum tokens for a semantic unit (larger units use line chunking)
     #[serde(default = "default_max_chunk_tokens")]
     pub max_chunk_tokens: usize,
+
+    /// Number of parallel threads for indexing (None = auto-detect)
+    #[serde(default)]
+    pub parallel_threads: Option<usize>,
+
+    /// Number of files to process in parallel batches
+    #[serde(default = "default_file_batch_size")]
+    pub file_batch_size: usize,
+
+    /// Maximum number of concurrent file operations
+    #[serde(default = "default_max_concurrent_files")]
+    pub max_concurrent_files: usize,
 }
 
 impl Default for IndexerConfig {
@@ -61,6 +73,9 @@ impl Default for IndexerConfig {
             chunker_strategy: ChunkerStrategy::default(),
             min_chunk_tokens: default_min_chunk_tokens(),
             max_chunk_tokens: default_max_chunk_tokens(),
+            parallel_threads: None,
+            file_batch_size: default_file_batch_size(),
+            max_concurrent_files: default_max_concurrent_files(),
         }
     }
 }
@@ -83,6 +98,13 @@ fn default_extensions() -> Vec<String> {
         "jsx".to_string(),
         "go".to_string(),
         "java".to_string(),
+        "c".to_string(),
+        "cc".to_string(),
+        "cpp".to_string(),
+        "cxx".to_string(),
+        "h".to_string(),
+        "hpp".to_string(),
+        "hxx".to_string(),
     ]
 }
 
@@ -101,6 +123,14 @@ fn default_ignore_patterns() -> Vec<String> {
 
 fn default_chunk_size() -> usize {
     512
+}
+
+fn default_file_batch_size() -> usize {
+    100
+}
+
+fn default_max_concurrent_files() -> usize {
+    50
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

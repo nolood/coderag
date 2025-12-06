@@ -26,6 +26,18 @@ pub struct IndexedChunk {
     pub language: Option<String>,
     pub vector: Vec<f32>,
     pub mtime: i64,
+    /// First 50 lines of the file for context
+    pub file_header: Option<String>,
+    /// Semantic kind of the chunk (function, class, struct, etc.)
+    pub semantic_kind: Option<String>,
+    /// Name of the symbol (e.g., function name, class name)
+    pub symbol_name: Option<String>,
+    /// Full signature of the symbol (e.g., function signature with parameters)
+    pub signature: Option<String>,
+    /// Parent symbol context (e.g., class name for methods)
+    pub parent: Option<String>,
+    /// Visibility modifier (public, private, protected)
+    pub visibility: Option<String>,
 }
 
 /// Search result from vector similarity search
@@ -36,6 +48,8 @@ pub struct SearchResult {
     pub start_line: usize,
     pub end_line: usize,
     pub score: f32,
+    /// First 50 lines of the file for context
+    pub file_header: Option<String>,
 }
 
 /// LanceDB storage backend for vector embeddings
@@ -109,6 +123,13 @@ impl Storage {
                 false,
             ),
             Field::new("mtime", DataType::Int64, false),
+            Field::new("file_header", DataType::Utf8, true),
+            // Symbol metadata fields
+            Field::new("semantic_kind", DataType::Utf8, true),
+            Field::new("symbol_name", DataType::Utf8, true),
+            Field::new("signature", DataType::Utf8, true),
+            Field::new("parent", DataType::Utf8, true),
+            Field::new("visibility", DataType::Utf8, true),
         ])
     }
 
@@ -146,6 +167,32 @@ impl Storage {
             .map(|c| c.language.as_deref())
             .collect();
         let mtimes: Vec<i64> = chunks.iter().map(|c| c.mtime).collect();
+        let file_headers: Vec<Option<&str>> = chunks
+            .iter()
+            .map(|c| c.file_header.as_deref())
+            .collect();
+
+        // Symbol metadata fields
+        let semantic_kinds: Vec<Option<&str>> = chunks
+            .iter()
+            .map(|c| c.semantic_kind.as_deref())
+            .collect();
+        let symbol_names: Vec<Option<&str>> = chunks
+            .iter()
+            .map(|c| c.symbol_name.as_deref())
+            .collect();
+        let signatures: Vec<Option<&str>> = chunks
+            .iter()
+            .map(|c| c.signature.as_deref())
+            .collect();
+        let parents: Vec<Option<&str>> = chunks
+            .iter()
+            .map(|c| c.parent.as_deref())
+            .collect();
+        let visibilities: Vec<Option<&str>> = chunks
+            .iter()
+            .map(|c| c.visibility.as_deref())
+            .collect();
 
         // Build vector array
         let vector_array = FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
@@ -168,6 +215,12 @@ impl Storage {
                 Arc::new(StringArray::from(languages)),
                 Arc::new(vector_array),
                 Arc::new(Int64Array::from(mtimes)),
+                Arc::new(StringArray::from(file_headers)),
+                Arc::new(StringArray::from(semantic_kinds)),
+                Arc::new(StringArray::from(symbol_names)),
+                Arc::new(StringArray::from(signatures)),
+                Arc::new(StringArray::from(parents)),
+                Arc::new(StringArray::from(visibilities)),
             ],
         )
         .with_context(|| "Failed to create RecordBatch")
@@ -213,6 +266,10 @@ impl Storage {
                 .and_then(|c| c.as_any().downcast_ref::<Int32Array>())
                 .ok_or_else(|| anyhow::anyhow!("Missing end_line column"))?;
 
+            let file_headers = batch
+                .column_by_name("file_header")
+                .and_then(|c| c.as_any().downcast_ref::<StringArray>());
+
             // LanceDB returns _distance column for similarity score
             let distances = batch
                 .column_by_name("_distance")
@@ -223,12 +280,22 @@ impl Storage {
                     .map(|d| 1.0 / (1.0 + d.value(i))) // Convert distance to similarity
                     .unwrap_or(1.0);
 
+                let file_header = file_headers
+                    .and_then(|h| {
+                        if h.is_null(i) {
+                            None
+                        } else {
+                            Some(h.value(i).to_string())
+                        }
+                    });
+
                 search_results.push(SearchResult {
                     content: contents.value(i).to_string(),
                     file_path: file_paths.value(i).to_string(),
                     start_line: start_lines.value(i) as usize,
                     end_line: end_lines.value(i) as usize,
                     score,
+                    file_header,
                 });
             }
         }
@@ -396,6 +463,12 @@ impl Storage {
                 "end_line".to_string(),
                 "language".to_string(),
                 "mtime".to_string(),
+                "file_header".to_string(),
+                "semantic_kind".to_string(),
+                "symbol_name".to_string(),
+                "signature".to_string(),
+                "parent".to_string(),
+                "visibility".to_string(),
             ]))
             .execute()
             .await
@@ -443,6 +516,30 @@ impl Storage {
                 .and_then(|c| c.as_any().downcast_ref::<Int64Array>())
                 .ok_or_else(|| anyhow::anyhow!("Missing mtime column"))?;
 
+            let file_headers = batch
+                .column_by_name("file_header")
+                .and_then(|c| c.as_any().downcast_ref::<StringArray>());
+
+            let semantic_kinds = batch
+                .column_by_name("semantic_kind")
+                .and_then(|c| c.as_any().downcast_ref::<StringArray>());
+
+            let symbol_names = batch
+                .column_by_name("symbol_name")
+                .and_then(|c| c.as_any().downcast_ref::<StringArray>());
+
+            let signatures = batch
+                .column_by_name("signature")
+                .and_then(|c| c.as_any().downcast_ref::<StringArray>());
+
+            let parents = batch
+                .column_by_name("parent")
+                .and_then(|c| c.as_any().downcast_ref::<StringArray>());
+
+            let visibilities = batch
+                .column_by_name("visibility")
+                .and_then(|c| c.as_any().downcast_ref::<StringArray>());
+
             for i in 0..batch.num_rows() {
                 let language = languages
                     .and_then(|l| {
@@ -450,6 +547,60 @@ impl Storage {
                             None
                         } else {
                             Some(l.value(i).to_string())
+                        }
+                    });
+
+                let file_header = file_headers
+                    .and_then(|h| {
+                        if h.is_null(i) {
+                            None
+                        } else {
+                            Some(h.value(i).to_string())
+                        }
+                    });
+
+                let semantic_kind = semantic_kinds
+                    .and_then(|k| {
+                        if k.is_null(i) {
+                            None
+                        } else {
+                            Some(k.value(i).to_string())
+                        }
+                    });
+
+                let symbol_name = symbol_names
+                    .and_then(|n| {
+                        if n.is_null(i) {
+                            None
+                        } else {
+                            Some(n.value(i).to_string())
+                        }
+                    });
+
+                let signature = signatures
+                    .and_then(|s| {
+                        if s.is_null(i) {
+                            None
+                        } else {
+                            Some(s.value(i).to_string())
+                        }
+                    });
+
+                let parent = parents
+                    .and_then(|p| {
+                        if p.is_null(i) {
+                            None
+                        } else {
+                            Some(p.value(i).to_string())
+                        }
+                    });
+
+                let visibility = visibilities
+                    .and_then(|v| {
+                        if v.is_null(i) {
+                            None
+                        } else {
+                            Some(v.value(i).to_string())
                         }
                     });
 
@@ -462,6 +613,12 @@ impl Storage {
                     language,
                     vector: Vec::new(), // Empty vector - not needed for BM25
                     mtime: mtimes.value(i),
+                    file_header,
+                    semantic_kind,
+                    symbol_name,
+                    signature,
+                    parent,
+                    visibility,
                 });
             }
         }

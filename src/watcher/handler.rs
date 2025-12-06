@@ -14,7 +14,7 @@ use crate::embeddings::EmbeddingGenerator;
 use crate::indexer::Chunker;
 use crate::storage::{IndexedChunk, Storage};
 
-use super::debouncer::{ChangeType, FileChange};
+use super::accumulator::{ChangeType, FileChange};
 
 /// Statistics from processing file changes
 #[derive(Debug, Default, Clone)]
@@ -119,7 +119,7 @@ impl ChangeHandler {
             change.change_type, change.path
         );
 
-        match change.change_type {
+        match &change.change_type {
             ChangeType::Created => {
                 stats.chunks_created = self.index_file(&change.path).await?;
                 stats.files_added = 1;
@@ -137,6 +137,14 @@ impl ChangeHandler {
                 stats.chunks_removed = self.delete_file_chunks(&change.path).await?;
                 stats.files_deleted = 1;
                 info!("Removed deleted file from index: {:?}", change.path);
+            }
+            ChangeType::Renamed { from } => {
+                // Delete chunks from old location
+                stats.chunks_removed = self.delete_file_chunks(from).await?;
+                // Index at new location
+                stats.chunks_created = self.index_file(&change.path).await?;
+                stats.files_modified = 1;
+                info!("Re-indexed renamed file: {:?} -> {:?}", from, change.path);
             }
         }
 
@@ -163,6 +171,9 @@ impl ChangeHandler {
 
         // Get file mtime
         let mtime = get_file_mtime(path).unwrap_or(0);
+
+        // Extract file header (first 50 lines)
+        let file_header = extract_file_header(&content, 50);
 
         // Chunk the file
         let chunks = self.chunker.chunk_file(path, &content);
@@ -195,6 +206,12 @@ impl ChangeHandler {
                 language: chunk.language.clone(),
                 vector: embedding,
                 mtime,
+                file_header: Some(file_header.clone()),
+                semantic_kind: chunk.semantic_kind.map(|k| k.as_str().to_string()),
+                symbol_name: chunk.name.clone(),
+                signature: chunk.signature.clone(),
+                parent: chunk.parent.clone(),
+                visibility: None, // TODO: Extract from AST
             })
             .collect();
 
@@ -235,6 +252,15 @@ fn get_file_mtime(path: &std::path::Path) -> Result<i64> {
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0);
     Ok(mtime)
+}
+
+/// Extract the first N lines of a file as the header for context
+fn extract_file_header(content: &str, max_lines: usize) -> String {
+    content
+        .lines()
+        .take(max_lines)
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 #[cfg(test)]

@@ -3,8 +3,12 @@
 //! This module provides functionality to watch for file system changes
 //! and automatically re-index modified files.
 
+pub mod accumulator;
+pub mod batch_detector;
 pub mod debouncer;
+pub mod git_detector;
 pub mod handler;
+pub mod parallel_handler;
 
 use anyhow::{Context, Result};
 use notify::RecursiveMode;
@@ -17,10 +21,15 @@ use tracing::{debug, error, info, warn};
 
 use crate::config::Config;
 use crate::embeddings::EmbeddingGenerator;
+use crate::metrics::{BATCHED_FILES, MASS_CHANGES_DETECTED};
 use crate::storage::Storage;
 
-pub use debouncer::{ChangeType, FileChange};
+pub use accumulator::{ChangeAccumulator, ChangeType, FileChange};
+pub use batch_detector::BatchDetector;
+pub use debouncer::ChangeType as DebouncerChangeType;
+pub use git_detector::{detect_git_operation_type, is_git_operation, suggest_delay_for_operation, DebouncedEvent as GitDebouncedEvent, GitOp};
 pub use handler::{ChangeHandler, ProcessingStats};
+pub use parallel_handler::{BatchedEventProcessor, ParallelChangeHandler};
 
 /// Configuration for the file watcher
 #[derive(Debug, Clone)]
@@ -31,6 +40,10 @@ pub struct WatcherConfig {
     pub extensions: Vec<String>,
     /// Patterns to ignore
     pub ignore_patterns: Vec<String>,
+    /// Threshold for mass change detection (number of files)
+    pub mass_change_threshold: usize,
+    /// Delay for collecting changes during mass operations (milliseconds)
+    pub mass_change_delay_ms: u64,
 }
 
 impl Default for WatcherConfig {
@@ -39,6 +52,8 @@ impl Default for WatcherConfig {
             debounce_ms: 500,
             extensions: vec![],
             ignore_patterns: vec![],
+            mass_change_threshold: 50,
+            mass_change_delay_ms: 3000,
         }
     }
 }
@@ -50,6 +65,8 @@ impl WatcherConfig {
             debounce_ms,
             extensions: config.indexer.extensions.clone(),
             ignore_patterns: config.indexer.ignore_patterns.clone(),
+            mass_change_threshold: 50,
+            mass_change_delay_ms: 3000,
         }
     }
 }
@@ -127,6 +144,8 @@ impl FileWatcher {
 
         info!("Watching directory: {:?}", self.root);
         info!("Debounce delay: {}ms", self.config.debounce_ms);
+        info!("Mass change threshold: {} files", self.config.mass_change_threshold);
+        info!("Mass change delay: {}ms", self.config.mass_change_delay_ms);
 
         // Create change handler
         let mut handler = ChangeHandler::new(
@@ -136,6 +155,16 @@ impl FileWatcher {
             self.app_config.clone(),
         )?;
 
+        // Create batch detector
+        let mut batch_detector = BatchDetector::new(
+            self.config.mass_change_threshold,
+            20.0, // 20 changes per second threshold
+            Duration::from_millis(self.config.mass_change_delay_ms),
+        );
+
+        // Create change accumulator
+        let mut accumulator = ChangeAccumulator::new();
+
         let mut total_stats = ProcessingStats::default();
 
         // Event loop
@@ -144,24 +173,110 @@ impl FileWatcher {
                 // Check for shutdown signal
                 _ = &mut shutdown_rx => {
                     info!("Shutdown signal received, stopping watcher");
+
+                    // Process any accumulated changes before shutting down
+                    if !accumulator.is_empty() {
+                        let batched_changes = accumulator.flush();
+                        info!("Flushing {} batched changes before shutdown", batched_changes.len());
+                        if let Ok(stats) = handler.process_changes(batched_changes).await {
+                            total_stats.merge(&stats);
+                        }
+                    }
+
                     break;
                 }
 
                 // Process debounced events
                 Some(events) = rx.recv() => {
+                    // Convert to Git debounced events for detection
+                    let git_events: Vec<git_detector::DebouncedEvent> = events
+                        .iter()
+                        .map(|e| git_detector::DebouncedEvent::from(e.clone()))
+                        .collect();
+
+                    // Check for git operations
+                    let is_git = is_git_operation(&git_events);
+                    let git_op = if is_git {
+                        detect_git_operation_type(&git_events)
+                    } else {
+                        None
+                    };
+
+                    if let Some(op) = &git_op {
+                        info!("Git operation detected: {:?}, using extended batching", op);
+                    }
+
                     let changes = self.convert_events(events);
 
                     if !changes.is_empty() {
-                        info!("Processing {} file changes", changes.len());
+                        // Check for mass change
+                        if batch_detector.detect_mass_change(changes.len()) || git_op.is_some() {
+                            let delay = if let Some(op) = &git_op {
+                                Duration::from_millis(suggest_delay_for_operation(&op))
+                            } else {
+                                batch_detector.collection_delay()
+                            };
 
-                        match handler.process_changes(changes).await {
-                            Ok(stats) => {
-                                total_stats.merge(&stats);
-                                Self::print_stats(&stats);
+                            info!(
+                                "Mass change or git operation detected ({} files), batching with {}ms delay",
+                                changes.len(),
+                                delay.as_millis()
+                            );
+
+                            // Track metrics
+                            MASS_CHANGES_DETECTED.inc();
+
+                            // Accumulate changes
+                            for change in changes {
+                                accumulator.add_change(change);
                             }
-                            Err(e) => {
-                                error!("Failed to process changes: {}", e);
-                                total_stats.errors += 1;
+                        } else {
+                            // Process normally if not mass change and no pending accumulation
+                            if accumulator.is_empty() {
+                                info!("Processing {} file changes", changes.len());
+
+                                match handler.process_changes(changes).await {
+                                    Ok(stats) => {
+                                        total_stats.merge(&stats);
+                                        Self::print_stats(&stats);
+                                    }
+                                    Err(e) => {
+                                        error!("Failed to process changes: {}", e);
+                                        total_stats.errors += 1;
+                                    }
+                                }
+                            } else {
+                                // Add to accumulator if already accumulating
+                                for change in changes {
+                                    accumulator.add_change(change);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Check accumulator periodically
+                _ = tokio::time::sleep(Duration::from_millis(100)) => {
+                    if accumulator.is_accumulating() {
+                        let delay = batch_detector.collection_delay();
+                        if accumulator.should_flush(delay) {
+                            let batched_changes = accumulator.flush();
+                            if !batched_changes.is_empty() {
+                                info!("Flushing {} batched changes", batched_changes.len());
+
+                                // Track batch size metric
+                                BATCHED_FILES.observe(batched_changes.len() as f64);
+
+                                match handler.process_changes(batched_changes).await {
+                                    Ok(stats) => {
+                                        total_stats.merge(&stats);
+                                        Self::print_stats(&stats);
+                                    }
+                                    Err(e) => {
+                                        error!("Failed to process batched changes: {}", e);
+                                        total_stats.errors += 1;
+                                    }
+                                }
                             }
                         }
                     }
@@ -175,6 +290,7 @@ impl FileWatcher {
     /// Convert notify debounced events to our FileChange type
     fn convert_events(&self, events: Vec<DebouncedEvent>) -> Vec<FileChange> {
         let mut changes = Vec::new();
+        let now = std::time::Instant::now();
 
         for event in &events {
             for path in &event.paths {
@@ -203,7 +319,11 @@ impl FileWatcher {
                 };
 
                 debug!("File change detected: {:?} -> {:?}", change_type, path);
-                changes.push(FileChange::new(path.clone(), change_type));
+                changes.push(FileChange {
+                    path: path.clone(),
+                    change_type,
+                    timestamp: now,
+                });
             }
         }
 

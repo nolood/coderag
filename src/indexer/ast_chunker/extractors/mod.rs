@@ -3,6 +3,8 @@
 //! Each extractor knows how to traverse a language's AST and extract
 //! meaningful semantic units like functions, classes, and structs.
 
+pub mod c;
+pub mod cpp;
 pub mod go;
 pub mod java;
 pub mod python;
@@ -13,6 +15,8 @@ use std::collections::HashMap;
 
 use tree_sitter::Tree;
 
+pub use c::CExtractor;
+pub use cpp::CppExtractor;
 pub use go::GoExtractor;
 pub use java::JavaExtractor;
 pub use python::PythonExtractor;
@@ -162,6 +166,8 @@ impl ExtractorRegistry {
         registry.register(Box::new(TypeScriptExtractor::new(false))); // JavaScript/TypeScript
         registry.register(Box::new(GoExtractor));
         registry.register(Box::new(JavaExtractor));
+        registry.register(Box::new(CExtractor));
+        registry.register(Box::new(CppExtractor));
 
         // Also register JavaScript separately (uses same extractor)
         registry.extractors.insert(

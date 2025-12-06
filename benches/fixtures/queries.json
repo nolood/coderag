@@ -1,0 +1,84 @@
+{
+  "queries": [
+    {
+      "id": "fibonacci_algorithm",
+      "query": "function to calculate fibonacci numbers",
+      "expected_files": ["fibonacci.rs"],
+      "expected_symbols": ["fibonacci", "fib", "calculate_fibonacci"],
+      "min_precision": 0.8,
+      "min_recall": 0.7
+    },
+    {
+      "id": "error_handling",
+      "query": "error handling with Result type",
+      "expected_files": ["error.rs", "result.rs"],
+      "expected_symbols": ["AppError", "handle_error", "Result"],
+      "min_precision": 0.7,
+      "min_recall": 0.6
+    },
+    {
+      "id": "async_functions",
+      "query": "async functions with tokio",
+      "expected_files": ["async_handler.rs", "server.rs"],
+      "expected_symbols": ["async", "await", "tokio::spawn"],
+      "min_precision": 0.75,
+      "min_recall": 0.65
+    },
+    {
+      "id": "http_api",
+      "query": "HTTP API endpoint handlers",
+      "expected_files": ["api.rs", "routes.rs"],
+      "expected_symbols": ["handle_request", "router", "Response"],
+      "min_precision": 0.8,
+      "min_recall": 0.7
+    },
+    {
+      "id": "database_operations",
+      "query": "database connection and queries",
+      "expected_files": ["database.rs", "repository.rs"],
+      "expected_symbols": ["Database", "query", "connection_pool"],
+      "min_precision": 0.75,
+      "min_recall": 0.65
+    },
+    {
+      "id": "string_parsing",
+      "query": "parse and validate string input",
+      "expected_files": ["parser.rs", "validator.rs"],
+      "expected_symbols": ["parse", "validate", "Parser"],
+      "min_precision": 0.7,
+      "min_recall": 0.6
+    },
+    {
+      "id": "test_utilities",
+      "query": "test helper functions and utilities",
+      "expected_files": ["test_utils.rs", "helpers.rs"],
+      "expected_symbols": ["test", "mock", "fixture"],
+      "min_precision": 0.75,
+      "min_recall": 0.65
+    },
+    {
+      "id": "configuration",
+      "query": "load and parse configuration files",
+      "expected_files": ["config.rs", "settings.rs"],
+      "expected_symbols": ["Config", "load_config", "Settings"],
+      "min_precision": 0.8,
+      "min_recall": 0.7
+    },
+    {
+      "id": "serialization",
+      "query": "serialize and deserialize JSON data",
+      "expected_files": ["serialization.rs", "json_utils.rs"],
+      "expected_symbols": ["serde", "Serialize", "Deserialize"],
+      "min_precision": 0.75,
+      "min_recall": 0.65
+    },
+    {
+      "id": "authentication",
+      "query": "user authentication and authorization",
+      "expected_files": ["auth.rs", "jwt.rs"],
+      "expected_symbols": ["authenticate", "authorize", "Token"],
+      "min_precision": 0.8,
+      "min_recall": 0.7
+    }
+  ]
+}

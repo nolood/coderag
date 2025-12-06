@@ -59,6 +59,8 @@ pub struct SearchResultDto {
     pub content: String,
     /// Relevance score
     pub score: f32,
+    /// First 50 lines of the file for context
+    pub file_header: Option<String>,
 }
 
 /// Statistics response payload.
@@ -140,6 +142,7 @@ pub async fn search(
                         end_line: r.end_line,
                         content: r.content,
                         score: r.score,
+                        file_header: r.file_header,
                     })
                     .collect(),
                 query: request.query,

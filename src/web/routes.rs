@@ -24,7 +24,7 @@ pub fn create_router(state: AppState) -> Router {
         // API endpoints
         .route("/api/search", post(handlers::search))
         .route("/api/files", get(handlers::list_files))
-        .route("/api/files/*path", get(handlers::get_file))
+        .route("/api/files/{*path}", get(handlers::get_file))
         .route("/api/stats", get(handlers::stats))
         .route("/api/reindex", post(handlers::reindex))
         // Health and metrics

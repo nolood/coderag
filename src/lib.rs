@@ -3,11 +3,13 @@ pub mod commands;
 pub mod config;
 pub mod embeddings;
 pub mod indexer;
+pub mod indexing;
 pub mod mcp;
 pub mod metrics;
 pub mod registry;
 pub mod search;
 pub mod storage;
+pub mod symbol;
 pub mod watcher;
 pub mod web;
 

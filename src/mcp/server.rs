@@ -15,6 +15,9 @@ use std::sync::Arc;
 use crate::search::traits::Search;
 use crate::search::SearchEngine;
 use crate::storage::Storage;
+use crate::symbol::{
+    FindReferencesRequest, FindSymbolRequest, ListSymbolsRequest, SymbolIndex, SymbolSearcher,
+};
 
 /// Request parameters for semantic code search
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -64,6 +67,9 @@ pub struct GetFileRequest {
 pub struct CodeRagServer {
     search_engine: Arc<SearchEngine>,
     storage: Arc<Storage>,
+    #[allow(dead_code)]
+    symbol_index: Arc<SymbolIndex>,
+    symbol_searcher: Arc<SymbolSearcher>,
     root_path: PathBuf,
     tool_router: ToolRouter<Self>,
 }
@@ -74,11 +80,20 @@ impl CodeRagServer {
     pub fn new(
         search_engine: Arc<SearchEngine>,
         storage: Arc<Storage>,
+        symbol_index: Arc<SymbolIndex>,
         root_path: PathBuf,
     ) -> Self {
+        let symbol_searcher = Arc::new(SymbolSearcher::new(
+            symbol_index.clone(),
+            search_engine.clone(),
+            storage.clone(),
+        ));
+
         Self {
             search_engine,
             storage,
+            symbol_index,
+            symbol_searcher,
             root_path,
             tool_router: Self::tool_router(),
         }
@@ -123,6 +138,19 @@ impl CodeRagServer {
                     "**File:** {}:{}-{}\n",
                     result.file_path, result.start_line, result.end_line
                 ));
+
+                // Include file header if available
+                if let Some(ref header) = result.file_header {
+                    output.push_str("\n**File Header (first 50 lines):**\n");
+                    output.push_str("```\n");
+                    output.push_str(header);
+                    if !header.ends_with('\n') {
+                        output.push('\n');
+                    }
+                    output.push_str("```\n\n");
+                    output.push_str("**Matched Chunk:**\n");
+                }
+
                 output.push_str("```\n");
                 output.push_str(&result.content);
                 if !result.content.ends_with('\n') {
@@ -212,6 +240,151 @@ impl CodeRagServer {
         Ok(CallToolResult::success(vec![Content::text(output)]))
     }
 
+    /// Find symbol definitions by name
+    #[tool(
+        name = "find_symbol",
+        description = "Find symbol definitions (functions, classes, structs) by name. Supports exact, prefix, and fuzzy matching."
+    )]
+    async fn find_symbol(
+        &self,
+        Parameters(req): Parameters<FindSymbolRequest>,
+    ) -> Result<CallToolResult, McpError> {
+        let response = self
+            .symbol_searcher
+            .find_symbol(req)
+            .await
+            .map_err(|e| McpError::internal_error(format!("Symbol search failed: {}", e), None))?;
+
+        let mut output = String::new();
+        output.push_str(&format!(
+            "# Found {} symbols (mode: {})\n\n",
+            response.total_matches, response.search_mode_used
+        ));
+
+        for symbol in response.symbols {
+            output.push_str(&format!(
+                "## {} `{}`\n",
+                symbol.kind.to_uppercase(),
+                symbol.name
+            ));
+            output.push_str(&format!("**File:** {}\n", symbol.file_path));
+            output.push_str(&format!("**Lines:** {}-{}\n", symbol.start_line, symbol.end_line));
+
+            if let Some(sig) = symbol.signature {
+                output.push_str(&format!("**Signature:** `{}`\n", sig));
+            }
+            if let Some(parent) = symbol.parent {
+                output.push_str(&format!("**Parent:** {}\n", parent));
+            }
+            if let Some(vis) = symbol.visibility {
+                output.push_str(&format!("**Visibility:** {}\n", vis));
+            }
+            output.push_str(&format!("**Relevance:** {:.2}\n\n", symbol.relevance_score));
+        }
+
+        Ok(CallToolResult::success(vec![Content::text(output)]))
+    }
+
+    /// List all symbols in a file or matching criteria
+    #[tool(
+        name = "list_symbols",
+        description = "List all symbols in a file or matching criteria. Can filter by kind and visibility."
+    )]
+    async fn list_symbols(
+        &self,
+        Parameters(req): Parameters<ListSymbolsRequest>,
+    ) -> Result<CallToolResult, McpError> {
+        let response = self
+            .symbol_searcher
+            .list_symbols(req)
+            .await
+            .map_err(|e| McpError::internal_error(format!("Symbol listing failed: {}", e), None))?;
+
+        let mut output = String::new();
+
+        if let Some(ref path) = response.file_path {
+            output.push_str(&format!("# Symbols in {}\n\n", path));
+        } else {
+            output.push_str("# All Symbols\n\n");
+        }
+
+        output.push_str(&format!("**Total:** {} symbols\n\n", response.total_symbols));
+
+        if let Some(ref by_kind) = response.by_kind {
+            // Group by kind
+            for (kind, symbols) in by_kind {
+                output.push_str(&format!("## {} ({})\n", kind.to_uppercase(), symbols.len()));
+                for symbol in symbols {
+                    output.push_str(&format!("- **{}** (line {})", symbol.name, symbol.line));
+                    if let Some(ref sig) = symbol.signature {
+                        output.push_str(&format!(" - `{}`", sig));
+                    }
+                    output.push('\n');
+                }
+                output.push('\n');
+            }
+        } else {
+            // Flat list
+            for symbol in response.symbols {
+                output.push_str(&format!(
+                    "- **{}** {} (line {})",
+                    symbol.kind, symbol.name, symbol.line
+                ));
+                if let Some(ref sig) = symbol.signature {
+                    output.push_str(&format!(" - `{}`", sig));
+                }
+                output.push('\n');
+            }
+        }
+
+        Ok(CallToolResult::success(vec![Content::text(output)]))
+    }
+
+    /// Find all references to a symbol
+    #[tool(
+        name = "find_references",
+        description = "Find all references to a symbol (basic text search). Returns locations where the symbol is used."
+    )]
+    async fn find_references(
+        &self,
+        Parameters(req): Parameters<FindReferencesRequest>,
+    ) -> Result<CallToolResult, McpError> {
+        let symbol_name = req.symbol_name.clone();
+        let response = self
+            .symbol_searcher
+            .find_references(req)
+            .await
+            .map_err(|e| {
+                McpError::internal_error(format!("Reference search failed: {}", e), None)
+            })?;
+
+        let mut output = String::new();
+        output.push_str(&format!(
+            "# References to '{}'\n\n",
+            symbol_name
+        ));
+        output.push_str(&format!(
+            "**Found:** {} references in {} files\n\n",
+            response.total_references, response.files_affected
+        ));
+
+        let mut current_file = String::new();
+        for reference in response.references {
+            if reference.file_path != current_file {
+                current_file = reference.file_path.clone();
+                output.push_str(&format!("## {}\n", current_file));
+            }
+
+            output.push_str(&format!(
+                "- Line {}: `{}`\n",
+                reference.start_line,
+                reference.line_content.trim()
+            ));
+        }
+
+        Ok(CallToolResult::success(vec![Content::text(output)]))
+    }
+
     /// Run the MCP server using stdio transport
     pub async fn run(self) -> anyhow::Result<()> {
         let service = self.serve(stdio()).await?;
@@ -249,14 +422,18 @@ impl ServerHandler for CodeRagServer {
                 website_url: None,
             },
             instructions: Some(
-                "CodeRAG MCP Server - Semantic code search for your codebase.\n\n\
+                "CodeRAG MCP Server - Semantic code search and symbol navigation for your codebase.\n\n\
                  Available tools:\n\
                  - search: Find relevant code using natural language queries\n\
+                 - find_symbol: Find symbol definitions by name (functions, classes, structs)\n\
+                 - list_symbols: List all symbols in a file or matching criteria\n\
+                 - find_references: Find all references to a symbol\n\
                  - list_files: View all indexed files with optional glob filtering\n\
                  - get_file: Read the full content of any indexed file\n\n\
-                 Use 'search' to discover code patterns, implementations, and examples. \
-                 Use 'list_files' to explore the codebase structure. \
-                 Use 'get_file' to examine specific files in detail."
+                 Use 'search' for semantic code discovery. \
+                 Use 'find_symbol' to locate specific definitions. \
+                 Use 'list_symbols' to explore code structure. \
+                 Use 'find_references' to track symbol usage."
                     .into(),
             ),
         }
