@@ -259,7 +259,8 @@ async fn get_project_stats(project_path: &Path) -> Result<ProjectStats> {
         bail!("Index not found at {:?}", db_path);
     }
 
-    let storage = Storage::new(&db_path).await?;
+    // Use default dimension since we're only reading metadata
+    let storage = Storage::new_with_default_dimension(&db_path).await?;
 
     let chunk_count = storage.count_chunks().await?;
     let files = storage.list_files(None).await?;

@@ -50,9 +50,12 @@ pub async fn run(query: &str, limit: Option<usize>, no_auto_index: bool) -> Resu
 
     let limit = limit.unwrap_or(config.search.default_limit);
 
-    // Initialize components using resolved storage path
-    let storage = Arc::new(Storage::new(result.storage.db_path()).await?);
-    let embedder = Arc::new(EmbeddingGenerator::new(&config.embeddings)?);
+    // Initialize embedder first to get vector dimension
+    let embedder = Arc::new(EmbeddingGenerator::new_async(&config.embeddings).await?);
+    let vector_dimension = embedder.embedding_dimension();
+
+    // Initialize storage with vector dimension from embedder
+    let storage = Arc::new(Storage::new(result.storage.db_path(), vector_dimension).await?);
     let search_engine = SearchEngine::new(storage, embedder);
 
     // Perform search

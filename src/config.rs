@@ -136,8 +136,23 @@ fn default_max_concurrent_files() -> usize {
     50
 }
 
+/// Embedding provider type
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum EmbeddingProvider {
+    /// FastEmbed local embeddings (default)
+    #[default]
+    FastEmbed,
+    /// OpenAI API embeddings
+    OpenAI,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EmbeddingsConfig {
+    /// Embedding provider to use
+    #[serde(default)]
+    pub provider: EmbeddingProvider,
+
     /// Embedding model name
     #[serde(default = "default_model")]
     pub model: String,
@@ -145,13 +160,29 @@ pub struct EmbeddingsConfig {
     /// Batch size for embedding generation
     #[serde(default = "default_batch_size")]
     pub batch_size: usize,
+
+    /// OpenAI API key (can use ${OPENAI_API_KEY} for env var)
+    #[serde(default)]
+    pub openai_api_key: Option<String>,
+
+    /// OpenAI model name (default: text-embedding-3-small)
+    #[serde(default = "default_openai_model")]
+    pub openai_model: String,
+
+    /// OpenAI API base URL (for proxies like aitunnel, azure, etc.)
+    #[serde(default)]
+    pub openai_base_url: Option<String>,
 }
 
 impl Default for EmbeddingsConfig {
     fn default() -> Self {
         Self {
+            provider: EmbeddingProvider::default(),
             model: default_model(),
             batch_size: default_batch_size(),
+            openai_api_key: None,
+            openai_model: default_openai_model(),
+            openai_base_url: None,
         }
     }
 }
@@ -162,6 +193,10 @@ fn default_model() -> String {
 
 fn default_batch_size() -> usize {
     32
+}
+
+fn default_openai_model() -> String {
+    "text-embedding-3-small".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -390,19 +425,48 @@ impl Default for LoggingConfig {
 }
 
 impl Config {
-    /// Load configuration from the .coderag directory
+    /// Get the global config directory path (~/.coderag)
+    pub fn global_config_dir() -> Option<PathBuf> {
+        directories::BaseDirs::new()
+            .map(|base| base.home_dir().join(CONFIG_DIR))
+    }
+
+    /// Get the global config file path (~/.coderag/config.toml)
+    pub fn global_config_path() -> Option<PathBuf> {
+        Self::global_config_dir().map(|dir| dir.join(CONFIG_FILE))
+    }
+
+    /// Load configuration with fallback to global config
+    ///
+    /// Priority order:
+    /// 1. Project-local config (.coderag/config.toml in project root)
+    /// 2. Global config (~/.coderag/config.toml)
+    /// 3. Default config
     pub fn load(root: &Path) -> Result<Self> {
-        let config_path = root.join(CONFIG_DIR).join(CONFIG_FILE);
+        let local_config_path = root.join(CONFIG_DIR).join(CONFIG_FILE);
 
-        if config_path.exists() {
-            let content = std::fs::read_to_string(&config_path)
-                .with_context(|| format!("Failed to read config from {:?}", config_path))?;
+        // Try local config first
+        if local_config_path.exists() {
+            let content = std::fs::read_to_string(&local_config_path)
+                .with_context(|| format!("Failed to read config from {:?}", local_config_path))?;
 
-            toml::from_str(&content)
-                .with_context(|| format!("Failed to parse config from {:?}", config_path))
-        } else {
-            Ok(Config::default())
+            return toml::from_str(&content)
+                .with_context(|| format!("Failed to parse config from {:?}", local_config_path));
         }
+
+        // Fall back to global config
+        if let Some(global_config_path) = Self::global_config_path() {
+            if global_config_path.exists() {
+                let content = std::fs::read_to_string(&global_config_path)
+                    .with_context(|| format!("Failed to read global config from {:?}", global_config_path))?;
+
+                return toml::from_str(&content)
+                    .with_context(|| format!("Failed to parse global config from {:?}", global_config_path));
+            }
+        }
+
+        // Return default config
+        Ok(Config::default())
     }
 
     /// Save configuration to the .coderag directory

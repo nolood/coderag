@@ -10,6 +10,7 @@ use thiserror::Error;
 use tracing::{debug, info, warn};
 
 use crate::config::Config;
+use crate::embeddings::EmbeddingGenerator;
 use crate::indexer::Walker;
 use crate::indexing::ParallelIndexer;
 use crate::project_detection::{DetectedProject, DetectionError, ProjectDetector};
@@ -249,8 +250,12 @@ impl AutoIndexService {
             })?;
         }
 
+        // Create embedder to get vector dimension
+        let embedder = EmbeddingGenerator::new_async(&config.embeddings).await?;
+        let vector_dimension = embedder.embedding_dimension();
+
         // Create storage and check for existing index
-        let db = Storage::new(storage.db_path()).await?;
+        let db = Storage::new(storage.db_path(), vector_dimension).await?;
         let existing_mtimes = db.get_file_mtimes().await?;
         let was_incremental = !existing_mtimes.is_empty();
 

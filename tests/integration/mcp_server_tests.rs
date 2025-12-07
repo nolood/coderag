@@ -9,8 +9,8 @@ async fn setup_test_environment() -> Result<(TempDir, Arc<Storage>)> {
     let temp_dir = TempDir::new()?;
     let db_path = temp_dir.path().join("test.lance");
 
-    // Create storage
-    let storage = Arc::new(Storage::new(&db_path).await?);
+    // Create storage with dimension matching test vectors (768)
+    let storage = Arc::new(Storage::new(&db_path, 768).await?);
 
     // Insert test data
     let test_chunks = vec![
@@ -151,7 +151,8 @@ async fn test_search_with_metadata() -> Result<()> {
 async fn test_empty_database_handling() -> Result<()> {
     let temp_dir = TempDir::new()?;
     let db_path = temp_dir.path().join("empty.lance");
-    let storage = Arc::new(Storage::new(&db_path).await?);
+    // Use dimension 768 to match test vectors
+    let storage = Arc::new(Storage::new(&db_path, 768).await?);
 
     // Operations should handle empty database gracefully
     let results = storage.search(vec![0.5; 768], 10).await?;
@@ -193,7 +194,8 @@ async fn test_concurrent_access() -> Result<()> {
 async fn test_file_path_handling() -> Result<()> {
     let temp_dir = TempDir::new()?;
     let db_path = temp_dir.path().join("test.lance");
-    let storage = Arc::new(Storage::new(&db_path).await?);
+    // Use dimension 768 to match test vectors
+    let storage = Arc::new(Storage::new(&db_path, 768).await?);
 
     // Test various file path formats
     let chunks = vec![

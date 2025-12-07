@@ -155,7 +155,7 @@ pub mod sort {
 
     // Step 3: Store chunks in database
     let db_path = temp_dir.path().join("test.lance");
-    let storage = Storage::new(&db_path).await?;
+    let storage = Storage::new(&db_path, 768).await?;
     storage.insert_chunks(indexed_chunks).await?;
 
     // Step 4: Search for specific code
@@ -191,7 +191,7 @@ async fn test_incremental_indexing() -> Result<()> {
     std::fs::create_dir_all(&project_path)?;
 
     let db_path = temp_dir.path().join("test.lance");
-    let storage = Storage::new(&db_path).await?;
+    let storage = Storage::new(&db_path, 768).await?;
     let chunker = Chunker::new(512);
 
     // Initial file
@@ -321,7 +321,7 @@ function typescriptFunction(): number {
     std::fs::write(&ts_path, typescript_code)?;
 
     let db_path = temp_dir.path().join("test.lance");
-    let storage = Storage::new(&db_path).await?;
+    let storage = Storage::new(&db_path, 768).await?;
     let chunker = Chunker::new(512);
 
     // Chunk and index all files

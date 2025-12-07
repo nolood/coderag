@@ -160,19 +160,100 @@ pub struct EmbeddingGenerator {
 }
 
 impl EmbeddingGenerator {
-    /// Create a new EmbeddingGenerator with the configured model
+    /// Create a new EmbeddingGenerator with the configured model (sync version)
     ///
-    /// This maintains backward compatibility with the existing API
+    /// This maintains backward compatibility with the existing API.
+    /// NOTE: For OpenAI provider, use `new_async` when in an async context.
     pub fn new(config: &crate::config::EmbeddingsConfig) -> Result<Self> {
-        let fastembed_config = FastEmbedConfig {
-            model: config.model.clone(),
-            batch_size: config.batch_size,
-            cache_dir: None,
-        };
+        use crate::config::EmbeddingProvider as ConfigProvider;
 
-        let provider = Arc::new(FastEmbedProvider::new(&fastembed_config)?);
+        match config.provider {
+            ConfigProvider::FastEmbed => {
+                let fastembed_config = FastEmbedConfig {
+                    model: config.model.clone(),
+                    batch_size: config.batch_size,
+                    cache_dir: None,
+                };
+                let provider = Arc::new(FastEmbedProvider::new(&fastembed_config)?);
+                Ok(Self { provider })
+            }
+            ConfigProvider::OpenAI => {
+                // For OpenAI in sync context, try to use tokio's current handle
+                // or create a new runtime
+                let openai_config = super::config::OpenAIConfig {
+                    api_key: config.openai_api_key.clone().unwrap_or_default(),
+                    model: config.openai_model.clone(),
+                    organization: None,
+                    base_url: config.openai_base_url.clone(),
+                    max_retries: 3,
+                    timeout_secs: 30,
+                    batch_size: config.batch_size,
+                    initial_backoff_ms: 1000,
+                    max_backoff_ms: 60000,
+                    exponential_base: 2.0,
+                };
 
-        Ok(Self { provider })
+                // Try to use existing runtime handle first
+                if let Ok(handle) = tokio::runtime::Handle::try_current() {
+                    // We're inside an async runtime, use spawn_blocking to avoid nesting
+                    let config_clone = openai_config.clone();
+                    let provider = std::thread::spawn(move || {
+                        let rt = tokio::runtime::Runtime::new()
+                            .expect("Failed to create runtime");
+                        rt.block_on(super::openai_provider::OpenAIProvider::new(&config_clone))
+                    }).join()
+                        .map_err(|_| anyhow::anyhow!("Thread panicked during OpenAI initialization"))??;
+
+                    Ok(Self { provider: Arc::new(provider) })
+                } else {
+                    // No runtime, create a new one
+                    let rt = tokio::runtime::Runtime::new()
+                        .context("Failed to create tokio runtime for OpenAI initialization")?;
+
+                    let provider = rt.block_on(async {
+                        super::openai_provider::OpenAIProvider::new(&openai_config).await
+                    })?;
+
+                    Ok(Self { provider: Arc::new(provider) })
+                }
+            }
+        }
+    }
+
+    /// Create a new EmbeddingGenerator asynchronously
+    ///
+    /// Use this when already in an async context to avoid runtime nesting issues.
+    pub async fn new_async(config: &crate::config::EmbeddingsConfig) -> Result<Self> {
+        use crate::config::EmbeddingProvider as ConfigProvider;
+
+        match config.provider {
+            ConfigProvider::FastEmbed => {
+                let fastembed_config = FastEmbedConfig {
+                    model: config.model.clone(),
+                    batch_size: config.batch_size,
+                    cache_dir: None,
+                };
+                let provider = Arc::new(FastEmbedProvider::new(&fastembed_config)?);
+                Ok(Self { provider })
+            }
+            ConfigProvider::OpenAI => {
+                let openai_config = super::config::OpenAIConfig {
+                    api_key: config.openai_api_key.clone().unwrap_or_default(),
+                    model: config.openai_model.clone(),
+                    organization: None,
+                    base_url: config.openai_base_url.clone(),
+                    max_retries: 3,
+                    timeout_secs: 30,
+                    batch_size: config.batch_size,
+                    initial_backoff_ms: 1000,
+                    max_backoff_ms: 60000,
+                    exponential_base: 2.0,
+                };
+
+                let provider = super::openai_provider::OpenAIProvider::new(&openai_config).await?;
+                Ok(Self { provider: Arc::new(provider) })
+            }
+        }
     }
 
     /// Generate embeddings for a batch of texts (async version)

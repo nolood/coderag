@@ -20,8 +20,8 @@ use std::sync::Arc;
 
 /// Factory function for convenience - creates an embedding generator with registry
 pub async fn create_embedding_generator(config: &crate::config::EmbeddingsConfig) -> Result<EmbeddingGenerator> {
-    // For backward compatibility, use the legacy EmbeddingGenerator
-    EmbeddingGenerator::new(config)
+    // Use async version for proper OpenAI support
+    EmbeddingGenerator::new_async(config).await
 }
 
 /// Create a provider registry from enhanced configuration

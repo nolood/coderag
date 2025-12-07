@@ -84,17 +84,19 @@ pub async fn run(
         Transport::Stdio
     };
 
-    // Initialize storage using resolved path
-    let storage = Arc::new(
-        Storage::new(result.storage.db_path())
+    // Initialize embedding generator first (needed for vector dimension)
+    let embedder = Arc::new(
+        EmbeddingGenerator::new_async(&config.embeddings)
             .await
-            .map_err(|e| anyhow::anyhow!("Failed to initialize storage: {}", e))?,
+            .map_err(|e| anyhow::anyhow!("Failed to initialize embeddings: {}", e))?,
     );
 
-    // Initialize embedding generator
-    let embedder = Arc::new(
-        EmbeddingGenerator::new(&config.embeddings)
-            .map_err(|e| anyhow::anyhow!("Failed to initialize embeddings: {}", e))?,
+    // Initialize storage using resolved path and embedding dimension
+    let vector_dimension = embedder.embedding_dimension();
+    let storage = Arc::new(
+        Storage::new(result.storage.db_path(), vector_dimension)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to initialize storage: {}", e))?,
     );
 
     // Initialize search engine

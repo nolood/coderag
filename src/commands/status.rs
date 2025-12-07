@@ -43,7 +43,8 @@ pub async fn run() -> Result<()> {
 
                     // If index exists, show statistics
                     if storage.index_exists() {
-                        match Storage::new(storage.db_path()).await {
+                        // Use default dimension since we're only reading metadata
+                        match Storage::new_with_default_dimension(storage.db_path()).await {
                             Ok(db) => {
                                 let chunk_count = db.count_chunks().await.unwrap_or(0);
                                 let files = db.list_files(None).await.unwrap_or_default();

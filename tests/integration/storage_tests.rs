@@ -40,7 +40,7 @@ fn create_test_chunk_with_vector(id: &str, content: &str, file_path: &str, vecto
 async fn test_insert_and_search_chunks() -> Result<()> {
     let temp_dir = TempDir::new()?;
     let db_path = temp_dir.path().join("test.lance");
-    let storage = Storage::new(&db_path).await?;
+    let storage = Storage::new(&db_path, 768).await?;
 
     // Create test chunks with different vectors for better search testing
     let chunks = vec![
@@ -67,7 +67,7 @@ async fn test_insert_and_search_chunks() -> Result<()> {
 async fn test_delete_by_file() -> Result<()> {
     let temp_dir = TempDir::new()?;
     let db_path = temp_dir.path().join("test.lance");
-    let storage = Storage::new(&db_path).await?;
+    let storage = Storage::new(&db_path, 768).await?;
 
     // Insert chunks from multiple files
     let chunks = vec![
@@ -101,7 +101,7 @@ async fn test_delete_by_file() -> Result<()> {
 async fn test_list_files() -> Result<()> {
     let temp_dir = TempDir::new()?;
     let db_path = temp_dir.path().join("test.lance");
-    let storage = Storage::new(&db_path).await?;
+    let storage = Storage::new(&db_path, 768).await?;
 
     // Insert chunks from different files
     let chunks = vec![
@@ -137,7 +137,7 @@ async fn test_list_files() -> Result<()> {
 async fn test_file_mtimes() -> Result<()> {
     let temp_dir = TempDir::new()?;
     let db_path = temp_dir.path().join("test.lance");
-    let storage = Storage::new(&db_path).await?;
+    let storage = Storage::new(&db_path, 768).await?;
 
     // Insert chunks with different mtimes
     let chunks = vec![
@@ -165,7 +165,7 @@ async fn test_file_mtimes() -> Result<()> {
 async fn test_empty_operations() -> Result<()> {
     let temp_dir = TempDir::new()?;
     let db_path = temp_dir.path().join("test.lance");
-    let storage = Storage::new(&db_path).await?;
+    let storage = Storage::new(&db_path, 768).await?;
 
     // Insert empty vector should be ok
     storage.insert_chunks(vec![]).await?;
@@ -189,7 +189,7 @@ async fn test_empty_operations() -> Result<()> {
 async fn test_vector_similarity_ordering() -> Result<()> {
     let temp_dir = TempDir::new()?;
     let db_path = temp_dir.path().join("test.lance");
-    let storage = Storage::new(&db_path).await?;
+    let storage = Storage::new(&db_path, 768).await?;
 
     // Create chunks with progressively different vectors
     let base_vector = vec![1.0; 768];
@@ -230,7 +230,7 @@ async fn test_vector_similarity_ordering() -> Result<()> {
 async fn test_chunk_with_optional_fields() -> Result<()> {
     let temp_dir = TempDir::new()?;
     let db_path = temp_dir.path().join("test.lance");
-    let storage = Storage::new(&db_path).await?;
+    let storage = Storage::new(&db_path, 768).await?;
 
     // Create chunks with and without optional fields
     let mut chunk1 = create_test_chunk("1", "with header", "file1.rs");
@@ -261,7 +261,7 @@ async fn test_chunk_with_optional_fields() -> Result<()> {
 async fn test_large_batch_insert() -> Result<()> {
     let temp_dir = TempDir::new()?;
     let db_path = temp_dir.path().join("test.lance");
-    let storage = Storage::new(&db_path).await?;
+    let storage = Storage::new(&db_path, 768).await?;
 
     // Create a large batch of chunks
     let mut chunks = Vec::new();
@@ -292,7 +292,7 @@ async fn test_large_batch_insert() -> Result<()> {
 async fn test_duplicate_chunk_ids() -> Result<()> {
     let temp_dir = TempDir::new()?;
     let db_path = temp_dir.path().join("test.lance");
-    let storage = Storage::new(&db_path).await?;
+    let storage = Storage::new(&db_path, 768).await?;
 
     // Insert chunk with ID "duplicate"
     let chunk1 = create_test_chunk("duplicate", "first content", "file1.rs");

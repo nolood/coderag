@@ -62,16 +62,19 @@ impl ParallelIndexer {
             info!("Using {} threads for parallel processing", threads);
         }
 
+        // Create embedder first to get the vector dimension
+        let embedder = Arc::new(
+            EmbeddingGenerator::new_async(&config.embeddings).await
+                .context("Failed to initialize embedder")?
+        );
+        let vector_dimension = embedder.embedding_dimension();
+
+        // Then create storage with the correct vector dimension
         let db_path = storage_path.unwrap_or_else(|| config.db_path(&root));
         let storage = Arc::new(
-            Storage::new(&db_path)
+            Storage::new(&db_path, vector_dimension)
                 .await
                 .context("Failed to initialize storage")?
-        );
-
-        let embedder = Arc::new(
-            EmbeddingGenerator::new(&config.embeddings)
-                .context("Failed to initialize embedder")?
         );
 
         let walker = Arc::new(Walker::new(root.clone(), &config.indexer));
@@ -346,10 +349,11 @@ impl ParallelIndexer {
                 }
                 Err(e) => {
                     error!("Failed to generate embeddings for batch: {}", e);
-                    // Generate zero embeddings as fallback
+                    // Generate zero embeddings as fallback using the embedder's dimension
                     let fallback_count = batch.len();
+                    let dimension = self.embedder.embedding_dimension();
                     for _ in batch {
-                        all_embeddings.push(vec![0.0; 768]); // Assuming 768-dim embeddings
+                        all_embeddings.push(vec![0.0; dimension]);
                     }
                     processed += fallback_count;
                     progress.set_position(processed as u64);

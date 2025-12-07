@@ -19,6 +19,11 @@ use crate::storage::{IndexedChunk, SearchResult};
 /// BM25 index directory name within .coderag/
 const BM25_INDEX_DIR: &str = "bm25.index";
 
+/// Default vector dimension for test fixtures.
+/// BM25 search doesn't use vectors, but IndexedChunk requires one.
+#[cfg(test)]
+const TEST_VECTOR_DIMENSION: usize = 384;
+
 /// Schema field names
 const FIELD_ID: &str = "id";
 const FIELD_CONTENT: &str = "content";
@@ -352,7 +357,7 @@ mod tests {
             start_line: 1,
             end_line: 10,
             language: Some("rust".to_string()),
-            vector: vec![0.0; 768],
+            vector: vec![0.0; TEST_VECTOR_DIMENSION],
             mtime: 0,
             file_header: None,
             semantic_kind: None,

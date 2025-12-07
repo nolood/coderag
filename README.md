@@ -38,6 +38,22 @@ CodeRAG is a high-performance semantic code search tool that combines vector emb
 
 ## 📦 Installation
 
+### Prerequisites
+
+- **Rust** (1.70+)
+- **Protocol Buffers compiler** (`protoc`)
+
+```bash
+# macOS
+brew install protobuf
+
+# Ubuntu/Debian
+sudo apt install protobuf-compiler
+
+# Arch Linux
+sudo pacman -S protobuf
+```
+
 ### From Source
 ```bash
 git clone https://github.com/nolood/coderag.git

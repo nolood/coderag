@@ -16,9 +16,9 @@ impl TestHarness {
         let temp_dir = TempDir::new()?;
         let config = coderag::Config::default();
 
-        // Create storage with temp database
+        // Create storage with temp database (use default dimension for tests)
         let db_path = temp_dir.path().join("test.lance");
-        let storage = Arc::new(Storage::new(&db_path).await?);
+        let storage = Arc::new(Storage::new_with_default_dimension(&db_path).await?);
 
         Ok(Self {
             temp_dir,

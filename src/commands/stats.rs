@@ -31,7 +31,8 @@ async fn run_human_readable() -> Result<()> {
     let config = Config::load(&root)?;
 
     // Load storage to get current index statistics
-    let storage = Storage::new(&config.db_path(&root)).await?;
+    // Note: For stats, we don't need the exact vector dimension as we're only reading metadata
+    let storage = Storage::new_with_default_dimension(&config.db_path(&root)).await?;
 
     // Get current index stats from storage
     let total_chunks = storage.count_chunks().await?;
@@ -104,7 +105,8 @@ pub async fn run_prometheus() -> Result<()> {
     let config = Config::load(&root)?;
 
     // Load storage to update gauge metrics with current values
-    let storage = Storage::new(&config.db_path(&root)).await?;
+    // Note: For stats, we don't need the exact vector dimension as we're only reading metadata
+    let storage = Storage::new_with_default_dimension(&config.db_path(&root)).await?;
     let total_chunks = storage.count_chunks().await?;
     let total_files = storage.list_files(None).await?.len();
 

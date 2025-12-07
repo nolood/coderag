@@ -28,7 +28,8 @@ pub async fn run(force: bool) -> Result<()> {
             if let Ok(storage_location) = StorageResolver::resolve(&project) {
                 if storage_location.index_exists() {
                     eprintln!("Clearing existing index for full re-index...");
-                    let storage = Storage::new(storage_location.db_path()).await?;
+                    // Use default dimension since we're just clearing
+                    let storage = Storage::new_with_default_dimension(storage_location.db_path()).await?;
                     storage.clear().await?;
                 }
             }

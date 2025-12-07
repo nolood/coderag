@@ -36,8 +36,9 @@ pub async fn run(debounce_ms: u64) -> Result<()> {
     println!();
 
     // Initialize components
-    let storage = Arc::new(Storage::new(&config.db_path(&root)).await?);
-    let embedder = Arc::new(EmbeddingGenerator::new(&config.embeddings)?);
+    let embedder = Arc::new(EmbeddingGenerator::new_async(&config.embeddings).await?);
+    let vector_dimension = embedder.embedding_dimension();
+    let storage = Arc::new(Storage::new(&config.db_path(&root), vector_dimension).await?);
 
     // Create watcher config
     let watcher_config = WatcherConfig::from_config(&config, debounce_ms);

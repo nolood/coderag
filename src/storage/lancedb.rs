@@ -13,7 +13,9 @@ use std::sync::Arc;
 use tracing::{debug, info, warn};
 
 const TABLE_NAME: &str = "chunks";
-const VECTOR_DIMENSION: i32 = 768; // nomic-embed-text-v1.5 dimension
+/// Default vector dimension (OpenAI text-embedding-3-small)
+/// Used when no explicit dimension is provided.
+const DEFAULT_VECTOR_DIMENSION: usize = 1536;
 /// Maximum number of rows to query when fetching all data.
 /// Used as a fallback when count_rows fails, and as an upper bound for safety.
 const MAX_QUERY_ROWS: usize = 10_000_000;
@@ -59,35 +61,80 @@ pub struct SearchResult {
 pub struct Storage {
     db: Connection,
     db_path: PathBuf,
+    vector_dimension: i32,
 }
 
 impl Storage {
     /// Create or open a LanceDB storage at the given path
-    pub async fn new(path: &Path) -> Result<Self> {
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Path to the LanceDB database
+    /// * `vector_dimension` - Dimension of the embedding vectors (must match the embedding model)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - `vector_dimension` is 0
+    /// - Failed to connect to LanceDB
+    pub async fn new(path: &Path, vector_dimension: usize) -> Result<Self> {
+        if vector_dimension == 0 {
+            anyhow::bail!("Vector dimension must be greater than 0");
+        }
+
         let db_path = path.to_path_buf();
         let path_str = path.to_string_lossy();
 
-        info!("Opening LanceDB at: {}", path_str);
+        info!(
+            "Opening LanceDB at: {} (vector dimension: {})",
+            path_str, vector_dimension
+        );
 
         let db = connect(&path_str)
             .execute()
             .await
             .with_context(|| format!("Failed to connect to LanceDB at {}", path_str))?;
 
-        Ok(Self { db, db_path })
+        Ok(Self {
+            db,
+            db_path,
+            vector_dimension: vector_dimension as i32,
+        })
+    }
+
+    /// Create or open a LanceDB storage with default vector dimension
+    ///
+    /// Uses the default dimension (1536 for OpenAI text-embedding-3-small).
+    /// Prefer `new()` with explicit dimension when possible.
+    pub async fn new_with_default_dimension(path: &Path) -> Result<Self> {
+        Self::new(path, DEFAULT_VECTOR_DIMENSION).await
+    }
+
+    /// Get the configured vector dimension
+    pub fn vector_dimension(&self) -> usize {
+        self.vector_dimension as usize
     }
 
     /// Get or create the chunks table
+    ///
+    /// When opening an existing table, validates that its vector dimension
+    /// matches the configured dimension.
     async fn get_or_create_table(&self) -> Result<Table> {
         let table_names = self.db.table_names().execute().await?;
 
         if table_names.contains(&TABLE_NAME.to_string()) {
             debug!("Opening existing table: {}", TABLE_NAME);
-            self.db
+            let table = self
+                .db
                 .open_table(TABLE_NAME)
                 .execute()
                 .await
-                .with_context(|| format!("Failed to open table {}", TABLE_NAME))
+                .with_context(|| format!("Failed to open table {}", TABLE_NAME))?;
+
+            // Validate dimension compatibility with existing table
+            self.validate_existing_table_dimension(&table).await?;
+
+            Ok(table)
         } else {
             debug!("Creating new table: {}", TABLE_NAME);
             self.create_table().await
@@ -112,7 +159,7 @@ impl Storage {
 
     /// Create the chunks table with the correct schema
     async fn create_table(&self) -> Result<Table> {
-        let schema = Self::table_schema();
+        let schema = self.table_schema();
 
         // Create empty batches with schema to initialize table
         let batches = RecordBatchIterator::new(vec![], Arc::new(schema));
@@ -125,7 +172,7 @@ impl Storage {
     }
 
     /// Define the Arrow schema for the chunks table
-    fn table_schema() -> Schema {
+    fn table_schema(&self) -> Schema {
         Schema::new(vec![
             Field::new("id", DataType::Utf8, false),
             Field::new("content", DataType::Utf8, false),
@@ -137,7 +184,7 @@ impl Storage {
                 "vector",
                 DataType::FixedSizeList(
                     Arc::new(Field::new("item", DataType::Float32, true)),
-                    VECTOR_DIMENSION,
+                    self.vector_dimension,
                 ),
                 false,
             ),
@@ -152,16 +199,51 @@ impl Storage {
         ])
     }
 
+    /// Validate that an existing table has the expected vector dimension
+    async fn validate_existing_table_dimension(&self, table: &Table) -> Result<()> {
+        let schema = table.schema().await?;
+
+        for field in schema.fields() {
+            if field.name() == "vector" {
+                if let DataType::FixedSizeList(_, existing_dim) = field.data_type() {
+                    if *existing_dim != self.vector_dimension {
+                        anyhow::bail!(
+                            "Vector dimension mismatch: storage configured for {} dimensions, \
+                             but existing table has {} dimensions. \
+                             Delete the existing index or use matching embedding model.",
+                            self.vector_dimension,
+                            existing_dim
+                        );
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Insert chunks into the database
     pub async fn insert_chunks(&self, chunks: Vec<IndexedChunk>) -> Result<()> {
         if chunks.is_empty() {
             return Ok(());
         }
 
+        // Validate vector dimensions before storing
+        let expected_dim = self.vector_dimension as usize;
+        for chunk in &chunks {
+            if chunk.vector.len() != expected_dim {
+                anyhow::bail!(
+                    "Vector dimension mismatch for chunk '{}': expected {} dimensions, got {}",
+                    chunk.id,
+                    expected_dim,
+                    chunk.vector.len()
+                );
+            }
+        }
+
         let table = self.get_or_create_table().await?;
 
-        let batch = Self::chunks_to_record_batch(&chunks)?;
-        let batches = RecordBatchIterator::new(vec![Ok(batch)], Arc::new(Self::table_schema()));
+        let batch = self.chunks_to_record_batch(&chunks)?;
+        let batches = RecordBatchIterator::new(vec![Ok(batch)], Arc::new(self.table_schema()));
 
         table
             .add(Box::new(batches))
@@ -175,7 +257,7 @@ impl Storage {
     }
 
     /// Convert IndexedChunks to Arrow RecordBatch
-    fn chunks_to_record_batch(chunks: &[IndexedChunk]) -> Result<RecordBatch> {
+    fn chunks_to_record_batch(&self, chunks: &[IndexedChunk]) -> Result<RecordBatch> {
         let ids: Vec<&str> = chunks.iter().map(|c| c.id.as_str()).collect();
         let contents: Vec<&str> = chunks.iter().map(|c| c.content.as_str()).collect();
         let file_paths: Vec<&str> = chunks.iter().map(|c| c.file_path.as_str()).collect();
@@ -218,10 +300,10 @@ impl Storage {
             chunks
                 .iter()
                 .map(|c| Some(c.vector.iter().map(|&v| Some(v)))),
-            VECTOR_DIMENSION,
+            self.vector_dimension,
         );
 
-        let schema = Arc::new(Self::table_schema());
+        let schema = Arc::new(self.table_schema());
 
         RecordBatch::try_new(
             schema,

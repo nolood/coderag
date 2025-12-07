@@ -27,17 +27,18 @@ pub async fn run(port: u16) -> Result<()> {
 
     let config = Config::load(&root)?;
 
+    // Initialize the embedding generator first to get vector dimension
+    let embedder = Arc::new(EmbeddingGenerator::new_async(&config.embeddings).await?);
+    let vector_dimension = embedder.embedding_dimension();
+
     // Check if there's any indexed data
-    let storage = Arc::new(Storage::new(&config.db_path(&root)).await?);
+    let storage = Arc::new(Storage::new(&config.db_path(&root), vector_dimension).await?);
     let chunk_count = storage.count_chunks().await?;
 
     if chunk_count == 0 {
         println!("Warning: No indexed data found. Run 'coderag index' first.");
         println!("The web UI will still start, but search will return no results.\n");
     }
-
-    // Initialize the embedding generator
-    let embedder = Arc::new(EmbeddingGenerator::new(&config.embeddings)?);
 
     // Create the search engine based on configured mode
     let search_engine: Arc<dyn crate::search::traits::Search> = match config.search.mode {
