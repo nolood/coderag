@@ -110,7 +110,7 @@ impl SymbolIndex {
     pub fn find_by_name(&self, name: &str) -> Vec<SymbolRef> {
         self.by_name
             .get(name)
-            .map(|refs| refs.clone())
+            .cloned()
             .unwrap_or_default()
     }
 
@@ -153,7 +153,7 @@ impl SymbolIndex {
     pub fn get_by_kind(&self, kind: &str) -> Vec<SymbolRef> {
         self.by_kind
             .get(kind)
-            .map(|refs| refs.clone())
+            .cloned()
             .unwrap_or_default()
     }
 
@@ -161,7 +161,7 @@ impl SymbolIndex {
     pub fn get_by_file(&self, file_path: &str) -> Vec<SymbolRef> {
         self.by_file
             .get(file_path)
-            .map(|refs| refs.clone())
+            .cloned()
             .unwrap_or_default()
     }
 
@@ -211,8 +211,8 @@ fn levenshtein_distance(a: &str, b: &str) -> usize {
 
     let mut matrix: Vec<Vec<usize>> = vec![vec![0; b_len + 1]; a_len + 1];
 
-    for i in 0..=a_len {
-        matrix[i][0] = i;
+    for (i, row) in matrix.iter_mut().enumerate().take(a_len + 1) {
+        row[0] = i;
     }
     for j in 0..=b_len {
         matrix[0][j] = j;

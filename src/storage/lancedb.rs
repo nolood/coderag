@@ -10,10 +10,13 @@ use lancedb::{connect, Connection, Table};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 const TABLE_NAME: &str = "chunks";
 const VECTOR_DIMENSION: i32 = 768; // nomic-embed-text-v1.5 dimension
+/// Maximum number of rows to query when fetching all data.
+/// Used as a fallback when count_rows fails, and as an upper bound for safety.
+const MAX_QUERY_ROWS: usize = 10_000_000;
 
 /// Represents an indexed code chunk ready for storage
 #[derive(Debug, Clone)]
@@ -88,6 +91,22 @@ impl Storage {
         } else {
             debug!("Creating new table: {}", TABLE_NAME);
             self.create_table().await
+        }
+    }
+
+    /// Get the row count for a table, with fallback to MAX_QUERY_ROWS on error.
+    /// Logs a warning if count_rows fails.
+    async fn get_row_count_or_max(table: &Table) -> usize {
+        match table.count_rows(None).await {
+            Ok(count) => count,
+            Err(e) => {
+                warn!(
+                    error = %e,
+                    fallback = MAX_QUERY_ROWS,
+                    "Failed to count rows, using fallback limit"
+                );
+                MAX_QUERY_ROWS
+            }
         }
     }
 
@@ -307,12 +326,16 @@ impl Storage {
     pub async fn get_file_mtimes(&self) -> Result<HashMap<PathBuf, i64>> {
         let table = self.get_or_create_table().await?;
 
+        // Get total row count to ensure we query all rows
+        let total_rows = Self::get_row_count_or_max(&table).await;
+
         let results = table
             .query()
             .select(lancedb::query::Select::Columns(vec![
                 "file_path".to_string(),
                 "mtime".to_string(),
             ]))
+            .limit(total_rows) // Explicitly request all rows
             .execute()
             .await
             .with_context(|| "Failed to query file mtimes")?;
@@ -372,9 +395,13 @@ impl Storage {
     pub async fn list_files(&self, pattern: Option<&str>) -> Result<Vec<String>> {
         let table = self.get_or_create_table().await?;
 
+        // Get total row count to ensure we query all rows
+        let total_rows = Self::get_row_count_or_max(&table).await;
+
         let results = table
             .query()
             .select(lancedb::query::Select::Columns(vec!["file_path".to_string()]))
+            .limit(total_rows) // Explicitly request all rows
             .execute()
             .await
             .with_context(|| "Failed to query file paths")?;
@@ -453,6 +480,9 @@ impl Storage {
     pub async fn get_all_chunks(&self) -> Result<Vec<IndexedChunk>> {
         let table = self.get_or_create_table().await?;
 
+        // Get total row count to ensure we query all rows
+        let total_rows = Self::get_row_count_or_max(&table).await;
+
         let results = table
             .query()
             .select(lancedb::query::Select::Columns(vec![
@@ -470,6 +500,7 @@ impl Storage {
                 "parent".to_string(),
                 "visibility".to_string(),
             ]))
+            .limit(total_rows) // Explicitly request all rows
             .execute()
             .await
             .with_context(|| "Failed to query all chunks")?;

@@ -38,6 +38,18 @@ impl ParallelIndexer {
         root: PathBuf,
         config: Config,
     ) -> Result<Self> {
+        Self::with_storage_path(root, config, None).await
+    }
+
+    /// Create a new parallel indexer with a custom storage path.
+    ///
+    /// If `storage_path` is `None`, uses the default path from config.
+    /// This allows the auto-index service to use global storage paths.
+    pub async fn with_storage_path(
+        root: PathBuf,
+        config: Config,
+        storage_path: Option<PathBuf>,
+    ) -> Result<Self> {
         // Initialize Rayon thread pool if specified
         if let Some(threads) = config.indexer.parallel_threads {
             rayon::ThreadPoolBuilder::new()
@@ -50,8 +62,9 @@ impl ParallelIndexer {
             info!("Using {} threads for parallel processing", threads);
         }
 
+        let db_path = storage_path.unwrap_or_else(|| config.db_path(&root));
         let storage = Arc::new(
-            Storage::new(&config.db_path(&root))
+            Storage::new(&db_path)
                 .await
                 .context("Failed to initialize storage")?
         );
@@ -131,14 +144,16 @@ impl ParallelIndexer {
         }
 
         // Stage 4: Batch embedding generation
+        chunk_pb.set_position(0);
         chunk_pb.set_message("Generating embeddings...");
-        let embeddings = self.generate_embeddings_batch(&raw_chunks).await?;
+        let embeddings = self.generate_embeddings_batch(&raw_chunks, &chunk_pb).await?;
 
         // Stage 5: Parallel assembly of indexed chunks
         chunk_pb.set_message("Assembling chunks...");
         let indexed_chunks = self.assemble_chunks_parallel(raw_chunks, embeddings).await?;
 
         // Stage 6: Storage with backpressure
+        chunk_pb.set_position(0);
         chunk_pb.set_message("Storing chunks...");
         let chunk_count = indexed_chunks.len();
         self.store_chunks_with_backpressure(indexed_chunks.clone(), &chunk_pb).await?;
@@ -303,23 +318,45 @@ impl ParallelIndexer {
     }
 
     /// Generate embeddings in batches
-    async fn generate_embeddings_batch(&self, chunks: &[RawChunk]) -> Result<Vec<Vec<f32>>> {
+    async fn generate_embeddings_batch(
+        &self,
+        chunks: &[RawChunk],
+        progress: &ProgressBar,
+    ) -> Result<Vec<Vec<f32>>> {
         let batch_size = self.config.embeddings.batch_size;
         let mut all_embeddings = Vec::new();
+        let total_chunks = chunks.len();
+        let mut processed = 0;
 
         // Collect all chunk content
         let contents: Vec<String> = chunks.iter().map(|c| c.content.clone()).collect();
 
-        // Process in batches
+        // Process in batches using the async embed method to avoid runtime nesting
         for batch in contents.chunks(batch_size * 10) {
-            match self.embedder.embed(batch) {
-                Ok(embeddings) => all_embeddings.extend(embeddings),
+            let batch_vec: Vec<String> = batch.to_vec();
+            match self.embedder.embed_async(&batch_vec).await {
+                Ok(embeddings) => {
+                    processed += embeddings.len();
+                    progress.set_position(processed as u64);
+                    progress.set_message(format!(
+                        "Generating embeddings ({}/{})",
+                        processed, total_chunks
+                    ));
+                    all_embeddings.extend(embeddings);
+                }
                 Err(e) => {
                     error!("Failed to generate embeddings for batch: {}", e);
                     // Generate zero embeddings as fallback
+                    let fallback_count = batch.len();
                     for _ in batch {
                         all_embeddings.push(vec![0.0; 768]); // Assuming 768-dim embeddings
                     }
+                    processed += fallback_count;
+                    progress.set_position(processed as u64);
+                    progress.set_message(format!(
+                        "Generating embeddings ({}/{})",
+                        processed, total_chunks
+                    ));
                 }
             }
         }

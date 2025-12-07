@@ -23,6 +23,9 @@ pub struct Config {
 
     #[serde(default)]
     pub search: SearchConfig,
+
+    #[serde(default)]
+    pub logging: LoggingConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -342,6 +345,48 @@ fn default_rrf_k() -> f32 {
 
 fn default_search_limit() -> usize {
     10
+}
+
+/// Configuration for logging subsystem
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct LoggingConfig {
+    /// Enable file logging (default: true)
+    pub enabled: bool,
+
+    /// Directory for log files, relative to project root (default: ".coderag/logs")
+    pub directory: PathBuf,
+
+    /// Log file prefix (default: "coderag")
+    pub file_prefix: String,
+
+    /// Log rotation strategy: "daily", "hourly", "minutely", "never" (default: "daily")
+    pub rotation: String,
+
+    /// Log level for file output: "trace", "debug", "info", "warn", "error" (default: "debug")
+    pub level: String,
+
+    /// Maximum number of log files to retain - 0 means unlimited (default: 7)
+    /// TODO: Not yet implemented - log file cleanup is not currently performed
+    #[allow(dead_code)]
+    pub max_files: usize,
+
+    /// Also log to stderr (default: true)
+    pub stderr: bool,
+}
+
+impl Default for LoggingConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            directory: PathBuf::from(".coderag/logs"),
+            file_prefix: "coderag".to_string(),
+            rotation: "daily".to_string(),
+            level: "debug".to_string(),
+            max_files: 7,
+            stderr: true,
+        }
+    }
 }
 
 impl Config {

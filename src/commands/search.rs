@@ -1,7 +1,8 @@
-use anyhow::{bail, Result};
+use anyhow::Result;
 use std::env;
 use std::sync::Arc;
 
+use crate::auto_index::{AutoIndexPolicy, AutoIndexService};
 use crate::embeddings::EmbeddingGenerator;
 use crate::search::traits::Search;
 use crate::search::SearchEngine;
@@ -9,18 +10,48 @@ use crate::storage::Storage;
 use crate::Config;
 
 /// Run the search command
-pub async fn run(query: &str, limit: Option<usize>) -> Result<()> {
-    let root = env::current_dir()?;
+///
+/// With zero-ceremony support, this command:
+/// 1. Auto-detects the project root
+/// 2. Resolves storage location (local or global)
+/// 3. Auto-indexes if needed (unless `no_auto_index` is set)
+/// 4. Performs semantic search
+///
+/// # Arguments
+///
+/// * `query` - The search query
+/// * `limit` - Maximum number of results to return
+/// * `no_auto_index` - Skip auto-indexing before search
+pub async fn run(query: &str, limit: Option<usize>, no_auto_index: bool) -> Result<()> {
+    let cwd = env::current_dir()?;
 
-    if !Config::is_initialized(&root) {
-        bail!("CodeRAG is not initialized. Run 'coderag init' first.");
+    // Set up auto-index service with appropriate policy
+    let policy = if no_auto_index {
+        AutoIndexPolicy::Never
+    } else {
+        AutoIndexPolicy::OnMissingOrStale
+    };
+    let service = AutoIndexService::with_policy(policy);
+    let result = service.ensure_indexed(&cwd).await?;
+
+    if result.files_indexed > 0 {
+        eprintln!(
+            "Indexed {} files ({} chunks) in {:.2}s",
+            result.files_indexed, result.chunks_created, result.duration_secs
+        );
     }
 
-    let config = Config::load(&root)?;
-    let limit = limit.unwrap_or(10);
+    // Use resolved storage location for search
+    let config = if result.storage.is_local() {
+        Config::load(result.storage.root())?
+    } else {
+        Config::default()
+    };
 
-    // Initialize components
-    let storage = Arc::new(Storage::new(&config.db_path(&root)).await?);
+    let limit = limit.unwrap_or(config.search.default_limit);
+
+    // Initialize components using resolved storage path
+    let storage = Arc::new(Storage::new(result.storage.db_path()).await?);
     let embedder = Arc::new(EmbeddingGenerator::new(&config.embeddings)?);
     let search_engine = SearchEngine::new(storage, embedder);
 

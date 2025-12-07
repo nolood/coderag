@@ -1,0 +1,47 @@
+{
+  "memory_findings": {
+    "project_detection": {
+      "current_method": "Simple .coderag directory check via Config::is_initialized()",
+      "location": "src/config.rs:390-393",
+      "gap": "No auto-detection of project roots - user must run coderag init manually"
+    },
+    "global_registry": {
+      "location": "~/.local/share/coderag/registry.json",
+      "uses": "directories crate for platform-specific paths",
+      "features": ["find_by_path()", "atomic file operations", "ProjectInfo struct with stats"]
+    },
+    "configuration": {
+      "current": "Project-local only at .coderag/config.toml",
+      "sections": ["IndexerConfig", "EmbeddingsConfig", "StorageConfig", "ServerConfig", "SearchConfig"],
+      "gap": "No global config layer"
+    },
+    "incremental_updates": {
+      "strategy": "mtime-based change detection",
+      "location": "src/commands/index.rs:59-84",
+      "storage": "Each IndexedChunk has mtime field in LanceDB",
+      "gap": "Doesn't detect file deletions"
+    }
+  },
+  "documentation_findings": {
+    "directories_crate": {
+      "pattern": "ProjectDirs::from(\"com\", \"MyOrg\", \"MyApp\")",
+      "provides": ["config_dir()", "data_dir()", "cache_dir()"],
+      "note": "No directory creation - just paths"
+    },
+    "project_detection": {
+      "options": ["project-root crate (Cargo.lock)", "manual marker file search"],
+      "markers": [".git", "Cargo.toml", "package.json", "pyproject.toml", "go.mod"]
+    },
+    "config_hierarchy": {
+      "priority": "project-local > global > defaults",
+      "pattern": "Check project root for .config, fallback to ProjectDirs::config_dir()"
+    }
+  },
+  "key_files": [
+    "src/registry/global.rs",
+    "src/registry/project.rs",
+    "src/config.rs",
+    "src/commands/index.rs",
+    "src/storage/lancedb.rs"
+  ]
+}

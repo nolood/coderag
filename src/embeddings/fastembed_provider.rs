@@ -157,7 +157,6 @@ impl EmbeddingProvider for FastEmbedProvider {
 /// Legacy EmbeddingGenerator for backward compatibility
 pub struct EmbeddingGenerator {
     provider: Arc<dyn EmbeddingProvider>,
-    runtime: tokio::runtime::Handle,
 }
 
 impl EmbeddingGenerator {
@@ -172,23 +171,50 @@ impl EmbeddingGenerator {
         };
 
         let provider = Arc::new(FastEmbedProvider::new(&fastembed_config)?);
-        let runtime = tokio::runtime::Handle::current();
 
-        Ok(Self { provider, runtime })
+        Ok(Self { provider })
     }
 
-    /// Generate embeddings for a batch of texts
+    /// Generate embeddings for a batch of texts (async version)
     ///
-    /// Maintains synchronous API for backward compatibility
+    /// Use this method when calling from an async context to avoid runtime nesting issues.
+    pub async fn embed_async(&self, texts: &[String]) -> Result<Vec<Vec<f32>>> {
+        self.provider.embed(texts).await
+    }
+
+    /// Generate embedding for a single query string (async version)
+    ///
+    /// Use this method when calling from an async context to avoid runtime nesting issues.
+    pub async fn embed_query_async(&self, query: &str) -> Result<Vec<f32>> {
+        self.provider.embed_query(query).await
+    }
+
+    /// Generate embeddings for a batch of texts (sync version)
+    ///
+    /// WARNING: This method uses `block_on` and must NOT be called from within
+    /// an async runtime. Use `embed_async` when in an async context.
+    ///
+    /// Maintains synchronous API for backward compatibility with CLI commands
+    /// that create their own runtime.
     pub fn embed(&self, texts: &[String]) -> Result<Vec<Vec<f32>>> {
-        self.runtime.block_on(self.provider.embed(texts))
+        // Create a new runtime for synchronous contexts only
+        let rt = tokio::runtime::Runtime::new()
+            .context("Failed to create tokio runtime for embedding")?;
+        rt.block_on(self.provider.embed(texts))
     }
 
-    /// Generate embedding for a single query string
+    /// Generate embedding for a single query string (sync version)
     ///
-    /// Maintains synchronous API for backward compatibility
+    /// WARNING: This method uses `block_on` and must NOT be called from within
+    /// an async runtime. Use `embed_query_async` when in an async context.
+    ///
+    /// Maintains synchronous API for backward compatibility with CLI commands
+    /// that create their own runtime.
     pub fn embed_query(&self, query: &str) -> Result<Vec<f32>> {
-        self.runtime.block_on(self.provider.embed_query(query))
+        // Create a new runtime for synchronous contexts only
+        let rt = tokio::runtime::Runtime::new()
+            .context("Failed to create tokio runtime for embedding")?;
+        rt.block_on(self.provider.embed_query(query))
     }
 
     /// Get the embedding dimension for the current model

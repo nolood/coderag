@@ -11,24 +11,44 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Initialize CodeRAG in the current directory
-    Init,
-
-    /// Index or re-index the codebase
-    Index,
-
-    /// Start the MCP server
-    Serve {
-        /// Transport type: stdio (default) or http
-        #[arg(short, long, default_value = "stdio")]
-        transport: String,
-
-        /// Port for HTTP transport (default: 3000)
-        #[arg(short, long, default_value = "3000")]
-        port: u16,
+    /// Initialize CodeRAG with local configuration (optional - auto-detection works without this)
+    Init {
+        /// Force reinitialization even if already initialized
+        #[arg(long)]
+        force: bool,
     },
 
-    /// Search the codebase
+    /// Index the codebase (optional - happens automatically on search)
+    Index {
+        /// Force full re-index, ignoring incremental updates
+        #[arg(long)]
+        force: bool,
+    },
+
+    /// Start the MCP server (auto-indexes if needed)
+    Serve {
+        /// Use HTTP/SSE transport instead of stdio
+        #[arg(long)]
+        http: bool,
+
+        /// Port for HTTP transport (default: 3000)
+        #[arg(short, long)]
+        port: Option<u16>,
+
+        /// Skip auto-indexing on startup
+        #[arg(long)]
+        no_auto_index: bool,
+
+        /// Enable file watcher for automatic re-indexing
+        #[arg(long)]
+        watch: bool,
+
+        /// Debounce delay in milliseconds for file watcher (default: 500)
+        #[arg(long, default_value = "500")]
+        debounce_ms: u64,
+    },
+
+    /// Search the codebase (auto-indexes if needed)
     Search {
         /// Search query
         query: String,
@@ -36,6 +56,10 @@ pub enum Commands {
         /// Maximum number of results to return
         #[arg(short, long, default_value = "10")]
         limit: Option<usize>,
+
+        /// Skip auto-indexing before search
+        #[arg(long)]
+        no_auto_index: bool,
     },
 
     /// Watch for file changes and automatically re-index
@@ -63,6 +87,20 @@ pub enum Commands {
         /// Port to listen on
         #[arg(short, long, default_value = "8080")]
         port: u16,
+    },
+
+    /// Show project and index status
+    Status,
+
+    /// Migrate local .coderag/ storage to global storage
+    Migrate {
+        /// Keep local .coderag/ directory after migration (only removes index files)
+        #[arg(long)]
+        keep_local: bool,
+
+        /// Move files instead of copying (faster, but no rollback)
+        #[arg(long, short)]
+        move_files: bool,
     },
 }
 

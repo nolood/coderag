@@ -12,6 +12,11 @@ pub fn create_test_chunk(id: &str, content: &str, file_path: &str) -> IndexedChu
         vector: vec![0.0; 768],
         mtime: 0,
         file_header: None,
+        semantic_kind: None,
+        symbol_name: None,
+        signature: None,
+        parent: None,
+        visibility: None,
     }
 }
 
@@ -44,5 +49,10 @@ pub fn create_test_chunk_with_vector(
         vector,
         mtime: 0,
         file_header: None,
+        semantic_kind: None,
+        symbol_name: None,
+        signature: None,
+        parent: None,
+        visibility: None,
     }
 }

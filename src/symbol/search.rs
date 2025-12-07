@@ -156,7 +156,7 @@ impl SymbolSearcher {
                 .into_iter()
                 .map(|s| (s, 0.9))
                 .collect(),
-            "fuzzy" | _ => {
+            _ => {
                 // Fuzzy search with max distance of 3
                 self.symbol_index
                     .find_fuzzy(&request.query, 3)
@@ -233,7 +233,7 @@ impl SymbolSearcher {
             symbols.retain(|s| {
                 s.visibility
                     .as_ref()
-                    .map_or(false, |v| v.eq_ignore_ascii_case(visibility))
+                    .is_some_and(|v| v.eq_ignore_ascii_case(visibility))
             });
         }
 
@@ -258,7 +258,7 @@ impl SymbolSearcher {
             for summary in &summaries {
                 grouped
                     .entry(summary.kind.clone())
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(summary.clone());
             }
             Some(grouped)

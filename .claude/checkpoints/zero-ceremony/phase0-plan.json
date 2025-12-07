@@ -1,0 +1,113 @@
+{
+  "feature": "zero-ceremony-auto-indexing",
+  "stack": "rust",
+  "description": "Automatically detect project root, use global index storage, and auto-index on first search",
+  "modules": [
+    "src/project/detection.rs",
+    "src/indexing/change_detection.rs",
+    "src/commands/auto_index.rs"
+  ],
+  "new_files": [
+    "src/project/mod.rs",
+    "src/project/detection.rs",
+    "src/commands/auto_index.rs"
+  ],
+  "modified_files": [
+    "src/config.rs",
+    "src/registry/global.rs",
+    "src/commands/search.rs",
+    "src/commands/serve.rs",
+    "src/commands/init.rs",
+    "src/cli/mod.rs",
+    "src/lib.rs",
+    "src/storage/lancedb.rs"
+  ],
+  "implementation_order": [
+    {
+      "phase": 1,
+      "name": "Project Detection Module",
+      "files": ["src/project/mod.rs", "src/project/detection.rs"],
+      "description": "Create project detection system that identifies project roots by marker files"
+    },
+    {
+      "phase": 2,
+      "name": "Global Index Storage",
+      "files": ["src/registry/global.rs"],
+      "description": "Extend GlobalRegistry to manage index storage in ~/.coderag/indexes/"
+    },
+    {
+      "phase": 3,
+      "name": "Configuration Hierarchy",
+      "files": ["src/config.rs"],
+      "description": "Implement configuration merging: per-project > global > defaults"
+    },
+    {
+      "phase": 4,
+      "name": "Auto-Index Service",
+      "files": ["src/commands/auto_index.rs"],
+      "description": "Core service that powers zero-ceremony search with auto-detection and indexing"
+    },
+    {
+      "phase": 5,
+      "name": "Command Updates",
+      "files": ["src/commands/search.rs", "src/commands/serve.rs", "src/commands/init.rs"],
+      "description": "Wire auto-indexing into search and serve commands"
+    },
+    {
+      "phase": 6,
+      "name": "CLI Updates",
+      "files": ["src/cli/mod.rs"],
+      "description": "Update CLI arguments to reflect new capabilities"
+    }
+  ],
+  "key_decisions": [
+    {
+      "decision": "Project ID Generation",
+      "choice": "SHA256 hash of canonical path",
+      "rationale": "Stable, unique, and filesystem-safe identifiers"
+    },
+    {
+      "decision": "Storage Location Priority",
+      "choice": "Local .coderag/ takes precedence over global",
+      "rationale": "Backward compatibility with existing projects"
+    },
+    {
+      "decision": "Auto-Index Trigger",
+      "choice": "Search and serve commands trigger auto-indexing",
+      "rationale": "Zero-ceremony user experience while keeping explicit index command"
+    },
+    {
+      "decision": "Incremental Detection",
+      "choice": "Use file mtime comparison from existing LanceDB storage",
+      "rationale": "Already implemented pattern in the codebase"
+    },
+    {
+      "decision": "Configuration Merging",
+      "choice": "Per-project overrides global defaults (layered config)",
+      "rationale": "Flexible configuration with sensible defaults"
+    },
+    {
+      "decision": "No Automatic Migration",
+      "choice": "Existing local storage is respected",
+      "rationale": "No surprises for existing users"
+    }
+  ],
+  "project_markers": [
+    ".git",
+    "Cargo.toml",
+    "package.json",
+    "pyproject.toml",
+    "setup.py",
+    "go.mod",
+    "pom.xml",
+    "build.gradle",
+    "Makefile",
+    "CMakeLists.txt"
+  ],
+  "storage_layout": {
+    "global_dir": "~/.local/share/coderag/",
+    "indexes_subdir": "indexes/{project_id}/",
+    "registry_file": "registry.json",
+    "global_config": "config/defaults.toml"
+  }
+}

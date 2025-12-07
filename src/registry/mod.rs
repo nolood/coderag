@@ -21,5 +21,5 @@
 mod global;
 mod project;
 
-pub use global::GlobalRegistry;
+pub use global::{GlobalIndexInfo, GlobalRegistry};
 pub use project::{ProjectInfo, ProjectStats};

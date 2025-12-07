@@ -188,6 +188,7 @@ impl CppExtractor {
     }
 
     /// Find identifier within a declarator node (handles nested declarators)
+    #[allow(clippy::only_used_in_recursion)]
     fn find_identifier_in_declarator(&self, node: &Node, source: &[u8]) -> Option<String> {
         match node.kind() {
             "identifier" | "field_identifier" | "destructor_name" => {

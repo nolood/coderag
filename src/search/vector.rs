@@ -66,10 +66,11 @@ impl Search for SearchEngine {
 
         info!(search_type = "vector", query = query, "Starting vector search");
 
-        // Generate query embedding
+        // Generate query embedding (use async version to avoid runtime nesting)
         let query_vector = self
             .embedder
-            .embed_query(query)
+            .embed_query_async(query)
+            .await
             .with_context(|| format!("Failed to embed query: {}", query))?;
 
         debug!("Generated query embedding with {} dimensions", query_vector.len());

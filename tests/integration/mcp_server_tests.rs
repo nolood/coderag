@@ -24,6 +24,11 @@ async fn setup_test_environment() -> Result<(TempDir, Arc<Storage>)> {
             vector: vec![0.1; 768],
             mtime: 1000,
             file_header: Some("// Main file".to_string()),
+            semantic_kind: None,
+            symbol_name: None,
+            signature: None,
+            parent: None,
+            visibility: None,
         },
         IndexedChunk {
             id: "chunk_2".to_string(),
@@ -35,6 +40,11 @@ async fn setup_test_environment() -> Result<(TempDir, Arc<Storage>)> {
             vector: vec![0.2; 768],
             mtime: 1000,
             file_header: Some("// Library file".to_string()),
+            semantic_kind: None,
+            symbol_name: None,
+            signature: None,
+            parent: None,
+            visibility: None,
         },
         IndexedChunk {
             id: "chunk_3".to_string(),
@@ -46,6 +56,11 @@ async fn setup_test_environment() -> Result<(TempDir, Arc<Storage>)> {
             vector: vec![0.3; 768],
             mtime: 1000,
             file_header: None,
+            semantic_kind: None,
+            symbol_name: None,
+            signature: None,
+            parent: None,
+            visibility: None,
         },
     ];
 
@@ -192,6 +207,11 @@ async fn test_file_path_handling() -> Result<()> {
             vector: vec![0.1; 768],
             mtime: 1000,
             file_header: None,
+            semantic_kind: None,
+            symbol_name: None,
+            signature: None,
+            parent: None,
+            visibility: None,
         },
         IndexedChunk {
             id: "2".to_string(),
@@ -203,6 +223,11 @@ async fn test_file_path_handling() -> Result<()> {
             vector: vec![0.2; 768],
             mtime: 1000,
             file_header: None,
+            semantic_kind: None,
+            symbol_name: None,
+            signature: None,
+            parent: None,
+            visibility: None,
         },
         IndexedChunk {
             id: "3".to_string(),
@@ -214,6 +239,11 @@ async fn test_file_path_handling() -> Result<()> {
             vector: vec![0.3; 768],
             mtime: 1000,
             file_header: None,
+            semantic_kind: None,
+            symbol_name: None,
+            signature: None,
+            parent: None,
+            visibility: None,
         },
     ];
 

@@ -16,6 +16,11 @@ fn create_test_chunk(id: &str, content: &str, file_path: &str) -> IndexedChunk {
         vector: vec![0.1; 768], // Simple test vector
         mtime: 1000,
         file_header: Some("// Test file header".to_string()),
+        semantic_kind: None,
+        symbol_name: None,
+        signature: None,
+        parent: None,
+        visibility: None,
     }
 }
 

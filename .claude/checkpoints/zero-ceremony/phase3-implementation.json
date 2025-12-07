@@ -1,0 +1,73 @@
+{
+  "feature": "zero-ceremony-auto-indexing",
+  "status": "completed",
+  "files_created": [
+    "src/project_detection/mod.rs",
+    "src/project_detection/markers.rs",
+    "src/project_detection/detector.rs",
+    "src/auto_index/mod.rs",
+    "src/auto_index/storage_resolver.rs",
+    "src/auto_index/service.rs",
+    "src/commands/status.rs"
+  ],
+  "files_modified": [
+    "src/lib.rs",
+    "src/cli/mod.rs",
+    "src/main.rs",
+    "src/commands/mod.rs",
+    "src/commands/search.rs",
+    "src/commands/serve.rs",
+    "src/commands/init.rs",
+    "src/commands/index.rs",
+    "src/registry/global.rs",
+    "src/registry/mod.rs",
+    "src/indexing/parallel.rs",
+    "src/embeddings/fastembed_provider.rs",
+    "src/search/vector.rs"
+  ],
+  "tests": {
+    "project_detection": 23,
+    "auto_index": 11,
+    "total": 34
+  },
+  "key_changes": [
+    {
+      "component": "Project Detection",
+      "description": "Detects project root by walking up directory tree looking for markers (.git, Cargo.toml, package.json, etc.)"
+    },
+    {
+      "component": "Storage Resolver",
+      "description": "Resolves storage location - local .coderag/ if exists, otherwise global ~/.local/share/coderag/indexes/{project_id}/"
+    },
+    {
+      "component": "AutoIndexService",
+      "description": "Main service that ensures index exists, auto-indexing on first search"
+    },
+    {
+      "component": "Command Integration",
+      "description": "search and serve commands now auto-index; init is optional"
+    },
+    {
+      "component": "CLI Updates",
+      "description": "Added --no-auto-index flag to search/serve, --force to init/index, new status command"
+    },
+    {
+      "component": "ParallelIndexer",
+      "description": "Added with_storage_path() method to support custom storage locations"
+    },
+    {
+      "component": "EmbeddingGenerator",
+      "description": "Added embed_query_async() to avoid runtime nesting when called from async context"
+    }
+  ],
+  "backward_compatibility": {
+    "local_coderag": "Projects with existing .coderag/ directory continue to use local storage",
+    "init_command": "Still available for explicit local configuration",
+    "index_command": "Still available for explicit indexing"
+  },
+  "usage_example": {
+    "zero_ceremony": "cd ~/projects/any-project && coderag search 'main function'",
+    "with_init": "coderag init && coderag index && coderag search 'main function'",
+    "skip_auto_index": "coderag search 'query' --no-auto-index"
+  }
+}

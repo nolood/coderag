@@ -212,7 +212,7 @@ impl FileWatcher {
                         // Check for mass change
                         if batch_detector.detect_mass_change(changes.len()) || git_op.is_some() {
                             let delay = if let Some(op) = &git_op {
-                                Duration::from_millis(suggest_delay_for_operation(&op))
+                                Duration::from_millis(suggest_delay_for_operation(op))
                             } else {
                                 batch_detector.collection_delay()
                             };

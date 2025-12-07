@@ -123,6 +123,11 @@ pub mod sort {
             vector,
             mtime: 0,
             file_header: None,
+            semantic_kind: None,
+            symbol_name: None,
+            signature: None,
+            parent: None,
+            visibility: None,
         });
         chunk_id += 1;
     }
@@ -139,6 +144,11 @@ pub mod sort {
             vector,
             mtime: 0,
             file_header: None,
+            semantic_kind: None,
+            symbol_name: None,
+            signature: None,
+            parent: None,
+            visibility: None,
         });
         chunk_id += 1;
     }
@@ -209,6 +219,11 @@ fn initial_function() {
             vector,
             mtime: 1000,
             file_header: None,
+            semantic_kind: None,
+            symbol_name: None,
+            signature: None,
+            parent: None,
+            visibility: None,
         });
     }
 
@@ -249,6 +264,11 @@ fn new_function() {
             vector,
             mtime: 2000,
             file_header: None,
+            semantic_kind: None,
+            symbol_name: None,
+            signature: None,
+            parent: None,
+            visibility: None,
         });
     }
 
@@ -331,6 +351,11 @@ function typescriptFunction(): number {
                 vector,
                 mtime: 0,
                 file_header: None,
+                semantic_kind: None,
+                symbol_name: None,
+                signature: None,
+                parent: None,
+                visibility: None,
             });
             chunk_id += 1;
         }

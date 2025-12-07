@@ -186,10 +186,11 @@ impl ChangeHandler {
         // Prepare chunks for embedding
         let chunk_contents: Vec<String> = chunks.iter().map(|c| c.content.clone()).collect();
 
-        // Generate embeddings
+        // Generate embeddings using async method to avoid runtime nesting
         let embeddings = self
             .embedder
-            .embed(&chunk_contents)
+            .embed_async(&chunk_contents)
+            .await
             .with_context(|| format!("Failed to generate embeddings for {:?}", path))?;
 
         // Create indexed chunks

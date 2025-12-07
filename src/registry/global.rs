@@ -212,6 +212,114 @@ impl GlobalRegistry {
         f(project);
         Ok(())
     }
+
+    /// Get the global indexes directory path.
+    ///
+    /// Returns `{global_dir}/indexes/` where global indexes are stored.
+    /// This directory contains subdirectories for each globally-indexed project.
+    pub fn indexes_dir() -> Result<PathBuf> {
+        Ok(Self::global_dir()?.join("indexes"))
+    }
+
+    /// List all globally indexed projects.
+    ///
+    /// Scans the `indexes/` directory and returns information about each
+    /// indexed project found.
+    pub fn list_global_indexes() -> Result<Vec<GlobalIndexInfo>> {
+        let indexes_dir = Self::indexes_dir()?;
+
+        if !indexes_dir.exists() {
+            return Ok(Vec::new());
+        }
+
+        let mut indexes = Vec::new();
+
+        for entry in fs::read_dir(&indexes_dir)? {
+            let entry = entry?;
+            let path = entry.path();
+
+            if path.is_dir() {
+                let project_id = path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("unknown")
+                    .to_string();
+
+                let db_path = path.join("index.lance");
+                let bm25_path = path.join("bm25");
+                let has_index = db_path.exists();
+
+                indexes.push(GlobalIndexInfo {
+                    project_id,
+                    index_path: path,
+                    db_path,
+                    bm25_path,
+                    has_index,
+                });
+            }
+        }
+
+        // Sort by project_id for consistent ordering
+        indexes.sort_by(|a, b| a.project_id.cmp(&b.project_id));
+
+        Ok(indexes)
+    }
+
+    /// Remove a global index by project ID.
+    ///
+    /// Deletes the entire index directory for the given project ID.
+    /// This removes both the LanceDB database and BM25 index.
+    pub fn remove_global_index(project_id: &str) -> Result<()> {
+        let index_path = Self::indexes_dir()?.join(project_id);
+
+        if index_path.exists() {
+            fs::remove_dir_all(&index_path)
+                .with_context(|| format!("Failed to remove global index at {:?}", index_path))?;
+            info!("Removed global index: {}", project_id);
+        } else {
+            debug!("Global index not found: {}", project_id);
+        }
+
+        Ok(())
+    }
+}
+
+/// Information about a globally stored index.
+#[derive(Debug, Clone)]
+pub struct GlobalIndexInfo {
+    /// Unique project identifier (format: `{name}-{hash}`)
+    pub project_id: String,
+    /// Path to the index directory
+    pub index_path: PathBuf,
+    /// Path to the LanceDB database
+    pub db_path: PathBuf,
+    /// Path to the BM25 index
+    pub bm25_path: PathBuf,
+    /// Whether the index exists (db_path exists)
+    pub has_index: bool,
+}
+
+impl GlobalIndexInfo {
+    /// Get the project name portion of the project ID.
+    ///
+    /// Extracts the human-readable name before the hash suffix.
+    pub fn project_name(&self) -> &str {
+        // Format is "name-hash", so we take everything before the last hyphen
+        self.project_id
+            .rfind('-')
+            .map(|pos| &self.project_id[..pos])
+            .unwrap_or(&self.project_id)
+    }
+
+    /// Get the hash portion of the project ID.
+    ///
+    /// Extracts the 8-character hex hash suffix.
+    pub fn project_hash(&self) -> &str {
+        self.project_id
+            .rfind('-')
+            .map(|pos| &self.project_id[pos + 1..])
+            .unwrap_or("")
+    }
 }
 
 #[cfg(test)]
