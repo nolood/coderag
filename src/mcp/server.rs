@@ -422,7 +422,7 @@ impl ServerHandler for CodeRagServer {
                 website_url: None,
             },
             instructions: Some(
-                "CodeRAG MCP Server - Semantic code search and symbol navigation for your codebase.\n\n\
+                "Use this server when user says 'use coderag' or asks to search, explore, or understand the current codebase.\n\n\
                  Available tools:\n\
                  - search: Find relevant code using natural language queries\n\
                  - find_symbol: Find symbol definitions by name (functions, classes, structs)\n\
